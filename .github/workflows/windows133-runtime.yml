@@ -1,0 +1,194 @@
+# Builds the Windows 13304 runtime from the exact source commit. The native
+# engine/host and installer are staged and verified separately.
+name: Windows 13304 runtime
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'desktop/**'
+      - 'distribution/updater/**'
+      - '.github/workflows/windows133-runtime.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-gnu-runtime:
+    name: Windows GNU GUI, CLI and embedded UI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: MinGW cross tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-mingw-w64-x86-64-posix g++-mingw-w64-x86-64-posix \
+            binutils-mingw-w64-x86-64 file python3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.90.0'
+          targets: x86_64-pc-windows-gnu
+
+      - name: Install and freeze frontend
+        working-directory: desktop
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build:web
+
+      - name: Compile Windows GUI and CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/ci-windows133-runtime
+          cd desktop/src-tauri
+          TAURI_CONFIG="$(cat tauri.windows133.json)" \
+            cargo build --target x86_64-pc-windows-gnu --release \
+              --features custom-protocol --locked --bins -j2 \
+              2>&1 | tee "$GITHUB_WORKSPACE/artifacts/ci-windows133-runtime/cargo-build.log"
+
+      - name: Verify linked embedded frontend
+        run: node distribution/windows/check-embedded-release.mjs
+
+      - name: Compile Windows unit-test PE if disk permits
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/ci-windows133-runtime
+          if [ "$(df -Pk . | awk 'NR==2 {print $4}')" -lt 4194304 ]; then
+            echo 'Skipped unit-test PE compile: less than 4 GiB free after GUI build' \
+              | tee artifacts/ci-windows133-runtime/test-pe-status.txt
+            exit 0
+          fi
+          cd desktop/src-tauri
+          TAURI_CONFIG="$(cat tauri.windows133.json)" \
+            cargo test --target x86_64-pc-windows-gnu --release \
+              --features custom-protocol --locked --lib --no-run -j2 \
+              2>&1 | tee "$GITHUB_WORKSPACE/artifacts/ci-windows133-runtime/cargo-test-compile.log"
+          echo 'Compiled only; not executed on Linux' \
+            > "$GITHUB_WORKSPACE/artifacts/ci-windows133-runtime/test-pe-status.txt"
+
+      - name: Freeze runtime inputs and source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, os, shutil, struct, zipfile
+          from pathlib import Path
+
+          root = Path(os.environ['GITHUB_WORKSPACE'])
+          out = root / 'artifacts/ci-windows133-runtime'
+          target = root / 'desktop/src-tauri/target/x86_64-pc-windows-gnu/release'
+          out.mkdir(parents=True, exist_ok=True)
+          for name in ('spektralab.exe', 'spektralab-cli.exe'):
+              source = target / name
+              assert source.is_file(), f'missing {source}'
+              shutil.copyfile(source, out / name)
+
+          registry = Path(os.environ.get('CARGO_HOME', str(Path.home() / '.cargo'))) / 'registry/src'
+          candidates = sorted(registry.glob('*/webview2-com-sys-0.39.1/**/WebView2Loader.dll'))
+          x64 = []
+          for path in candidates:
+              data = path.read_bytes()
+              if len(data) < 64 or data[:2] != b'MZ':
+                  continue
+              offset = struct.unpack_from('<I', data, 0x3c)[0]
+              if offset + 6 > len(data) or data[offset:offset + 4] != b'PE\0\0':
+                  continue
+              if struct.unpack_from('<H', data, offset + 4)[0] == 0x8664:
+                  x64.append((path, data))
+          assert x64, 'locked webview2-com-sys 0.39.1 has no x64 WebView2Loader.dll'
+          assert len({hashlib.sha256(data).digest() for _, data in x64}) == 1, 'ambiguous x64 loader DLLs'
+          assert len(x64[0][1]) <= 16 * 1024 * 1024, 'loader exceeds helper staging limit'
+          (out / 'WebView2Loader.dll').write_bytes(x64[0][1])
+
+          dist = root / 'desktop/dist'
+          files = sorted(p for p in dist.rglob('*') if p.is_file())
+          assert files and (dist / 'index.html').is_file(), 'frontend dist is missing'
+          with zipfile.ZipFile(out / 'WindowsFrozenDist.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
+              for path in files:
+                  archive.write(path, path.relative_to(dist).as_posix())
+          shutil.copyfile(root / 'artifacts/WINDOWS133-EMBEDDED-UI-CHECK.json',
+                          out / 'WINDOWS133-EMBEDDED-UI-CHECK.json')
+          names = ('spektralab.exe', 'spektralab-cli.exe', 'WebView2Loader.dll',
+                   'WindowsFrozenDist.zip', 'WINDOWS133-EMBEDDED-UI-CHECK.json')
+          receipt = {
+              'source_commit': os.environ['GITHUB_SHA'],
+              'target': 'x86_64-pc-windows-gnu',
+              'build': 13304,
+              'test_pe': (out / 'test-pe-status.txt').read_text().strip(),
+              'files': {name: hashlib.sha256((out / name).read_bytes()).hexdigest() for name in names},
+          }
+          (out / 'SOURCE-STATUS.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          print(json.dumps(receipt, indent=2))
+          PY
+          find desktop/src-tauri/target/x86_64-pc-windows-gnu/release/deps \
+            -maxdepth 1 -type f -name 'spektralab_lib-*.exe' \
+            -exec cp -t artifacts/ci-windows133-runtime {} + 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows133-gnu-${{ github.sha }}
+          path: artifacts/ci-windows133-runtime/
+          if-no-files-found: warn
+          retention-days: 14
+
+  windows-native-unit:
+    name: Windows native Rust unit tests
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.90.0'
+
+      - name: Build frontend for Tauri test context
+        shell: bash
+        working-directory: desktop
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build:web
+
+      - name: Execute Rust unit tests on Windows
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/ci-windows133-native
+          cd desktop/src-tauri
+          TAURI_CONFIG="$(cat tauri.windows133.json)" \
+            cargo test --release --lib --features custom-protocol --locked -j2 \
+              2>&1 | tee "$GITHUB_WORKSPACE/artifacts/ci-windows133-native/cargo-test.log"
+
+      - name: Record tested source commit
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p artifacts/ci-windows133-native
+          printf '%s\n' "$GITHUB_SHA" > artifacts/ci-windows133-native/SOURCE-COMMIT.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows133-native-tests-${{ github.sha }}
+          path: artifacts/ci-windows133-native/
+          if-no-files-found: warn
+          retention-days: 14
