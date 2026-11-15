@@ -120,21 +120,25 @@ jobs:
                   archive.write(path, path.relative_to(dist).as_posix())
           shutil.copyfile(root / 'artifacts/WINDOWS133-EMBEDDED-UI-CHECK.json',
                           out / 'WINDOWS133-EMBEDDED-UI-CHECK.json')
-          names = ('spektralab.exe', 'spektralab-cli.exe', 'WebView2Loader.dll',
-                   'WindowsFrozenDist.zip', 'WINDOWS133-EMBEDDED-UI-CHECK.json')
+          test_status = (out / 'test-pe-status.txt').read_text().strip()
+          test_pes = sorted((target / 'deps').glob('spektralab_lib-*.exe'))
+          if test_status.startswith('Compiled'):
+              assert len(test_pes) == 1, f'expected one compiled unit-test PE, got {len(test_pes)}'
+              shutil.copyfile(test_pes[0], out / test_pes[0].name)
+          names = ['spektralab.exe', 'spektralab-cli.exe', 'WebView2Loader.dll',
+                   'WindowsFrozenDist.zip', 'WINDOWS133-EMBEDDED-UI-CHECK.json']
+          if test_status.startswith('Compiled'):
+              names.append(test_pes[0].name)
           receipt = {
               'source_commit': os.environ['GITHUB_SHA'],
               'target': 'x86_64-pc-windows-gnu',
               'build': 13304,
-              'test_pe': (out / 'test-pe-status.txt').read_text().strip(),
+              'test_pe': test_status,
               'files': {name: hashlib.sha256((out / name).read_bytes()).hexdigest() for name in names},
           }
           (out / 'SOURCE-STATUS.json').write_text(json.dumps(receipt, indent=2) + '\n')
           print(json.dumps(receipt, indent=2))
           PY
-          find desktop/src-tauri/target/x86_64-pc-windows-gnu/release/deps \
-            -maxdepth 1 -type f -name 'spektralab_lib-*.exe' \
-            -exec cp -t artifacts/ci-windows133-runtime {} + 2>/dev/null || true
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -160,6 +164,26 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: '1.90.0'
+
+      - name: Check signed fixture checkout bytes
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import {readFileSync, readdirSync} from 'node:fs';
+          import {execFileSync} from 'node:child_process';
+          import {createHash} from 'node:crypto';
+          const root='distribution/updater/';
+          const names=['public-key.json',...readdirSync(root+'tests')
+            .filter(name=>name.endsWith('.json')||name.endsWith('.json.sig'))
+            .map(name=>'tests/'+name)];
+          for(const name of names){
+            const path=root+name;
+            const blob=execFileSync('git',['show','HEAD:'+path]);
+            const checkout=readFileSync(path);
+            if(!blob.equals(checkout))throw Error('Git changed signed fixture bytes: '+path);
+            console.log(path,createHash('sha256').update(checkout).digest('hex'));
+          }
+          JS
 
       - name: Build frontend for Tauri test context
         shell: bash

@@ -30,10 +30,13 @@ impl Transfers {
     fn new(max_bytes: usize, max_entries: usize) -> Self {
         Self { entries: HashMap::new(), next: 0, reserved: 0, max_bytes, max_entries }
     }
-    fn insert(&mut self, entry: Entry) -> Result<String, String> {
-        let expired: Vec<_> = self.entries.iter().filter(|(_, e)| e.touched.elapsed() > TTL)
+    fn expire_at(&mut self, now: Instant) {
+        let expired: Vec<_> = self.entries.iter().filter(|(_, e)| now.saturating_duration_since(e.touched) > TTL)
             .map(|(id, _)| id.clone()).collect();
         for id in expired { self.drop_id(&id); }
+    }
+    fn insert(&mut self, entry: Entry) -> Result<String, String> {
+        self.expire_at(Instant::now());
         if self.entries.len() >= self.max_entries || entry.expected > self.max_bytes.saturating_sub(self.reserved) {
             return Err("binary transfer memory limit reached; finish or cancel the current operation".into());
         }
@@ -131,7 +134,14 @@ mod tests {
         let mut pool = Transfers::new(3, 1);
         assert!(pool.download(vec![0; 4]).is_err());
         let id = pool.upload("expired".into(), 3).unwrap();
-        pool.entries.get_mut(&id).unwrap().touched = Instant::now()-TTL-Duration::from_secs(1);
+        let touched = Instant::now();
+        pool.entries.get_mut(&id).unwrap().touched = touched;
+        pool.expire_at(touched + TTL);
+        assert_eq!(pool.reserved, 3);
+        assert!(pool.entries.contains_key(&id));
+        pool.expire_at(touched + TTL + Duration::from_secs(1));
+        assert_eq!(pool.reserved, 0);
+        assert!(!pool.entries.contains_key(&id));
         let new_id = pool.download(vec![7, 8, 9]).unwrap();
         assert_eq!(pool.read(&new_id, 0).unwrap(), vec![7, 8, 9]);
         assert_eq!(pool.reserved, 0);

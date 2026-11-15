@@ -1,0 +1,5 @@
+# Keep signed updater bytes identical on Windows and Unix checkouts.
+* text=auto eol=lf
+distribution/updater/tests/*.json text eol=lf
+distribution/updater/tests/*.json.sig text eol=lf
+distribution/updater/public-key.json text eol=lf
