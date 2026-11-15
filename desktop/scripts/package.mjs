@@ -139,5 +139,7 @@ if (which === 'linux') env.NO_STRIP = env.NO_STRIP ?? 'true'; // linuxdeploy's s
 // On Windows `npx` is npx.cmd, which needs a shell; the shell then needs a
 // quoted path if the checkout's path has a space in it.
 const arg = (a) => (onWindows && /\s/.test(a) ? `"${a}"` : a);
-execFileSync('npx', ['tauri', 'build', '--config', conf, '--bundles', t.bundles, ...t.extra].map(arg), { cwd: desktop, stdio: 'inherit', env, shell: onWindows });
+// The Tauri CLI enables tauri/custom-protocol but not this crate's own
+// `custom-protocol` feature, which build.rs requires for release builds.
+execFileSync('npx', ['tauri', 'build', '--config', conf, '--bundles', t.bundles, '--features', 'custom-protocol', ...t.extra].map(arg), { cwd: desktop, stdio: 'inherit', env, shell: onWindows });
 collect(t);
