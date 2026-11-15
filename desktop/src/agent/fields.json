@@ -1,0 +1,935 @@
+[
+  {
+    "path": "params.filmStock",
+    "doc": "The negative (or slide) film. A slide film is scanned, not printed.",
+    "type": "film"
+  },
+  {
+    "path": "params.printStock",
+    "doc": "The paper. Refused while the film is a slide film.",
+    "type": "paper"
+  },
+  {
+    "path": "params.exposureCompensationEV",
+    "doc": "Film Exposure, stops, added to the meter.",
+    "type": "number",
+    "min": -4.0,
+    "max": 4.0
+  },
+  {
+    "path": "params.autoExposureMethod",
+    "doc": "The meter's intent while autoExposure is on.",
+    "type": "choice",
+    "choiceSource": "ExposureMethod.allCases.map(\\.rawValue)"
+  },
+  {
+    "path": "params.autoExposure",
+    "doc": "Metering. Off is the Custom method: Film Exposure alone, from the linearized frame.",
+    "type": "bool"
+  },
+  {
+    "path": "params.filmFormatMM",
+    "doc": "The frame's long edge on the wire.",
+    "type": "number",
+    "min": 4.0,
+    "max": 200.0,
+    "readOnly": "Derived from filmFrame, filmSide, sideLengthMM and the photograph's aspect."
+  },
+  {
+    "path": "params.filmFrame",
+    "doc": "Film Type: sets the grain, halation and diffusion scale.",
+    "type": "choice",
+    "choiceSource": "FilmFrame.all.map(\\.id)"
+  },
+  {
+    "path": "params.filmSide",
+    "doc": "Which side sideLengthMM measures.",
+    "type": "choice",
+    "choiceSource": "FilmSide.allCases.map(\\.rawValue)"
+  },
+  {
+    "path": "params.sideLengthMM",
+    "doc": "Side Length. Setting it makes filmFrame Custom, as typing it does.",
+    "type": "number",
+    "min": 1.0,
+    "max": 500.0
+  },
+  {
+    "path": "params.grainActive",
+    "doc": "Grain.",
+    "type": "bool"
+  },
+  {
+    "path": "params.halationActive",
+    "doc": "Halation.",
+    "type": "bool"
+  },
+  {
+    "path": "params.printBrightnessStops",
+    "doc": "Enlarger exposure, stops; positive prints brighter.",
+    "type": "number",
+    "min": -3.0,
+    "max": 3.0
+  },
+  {
+    "path": "params.yFilterShift",
+    "doc": "Enlarger yellow filter offset from the solved neutral (yellow ↔ blue).",
+    "type": "number",
+    "min": -1.0,
+    "max": 1.0
+  },
+  {
+    "path": "params.mFilterShift",
+    "doc": "Enlarger magenta filter offset from the solved neutral (magenta ↔ green).",
+    "type": "number",
+    "min": -1.0,
+    "max": 1.0
+  },
+  {
+    "path": "params.glareActive",
+    "doc": "The print's veiling glare.",
+    "type": "bool"
+  },
+  {
+    "path": "params.scanFilm",
+    "doc": "No print: scan the developed film. Always true for a slide film.",
+    "type": "bool"
+  },
+  {
+    "path": "params.digitalIntermediate",
+    "doc": "Digital Intermediate (RFC-028): the negative de-masked and reversed on its own neutral curve, as Cineon log, in place of the paper. Scene Placement does not apply to it. Ignored while scanFilm and for a slide film.",
+    "type": "bool"
+  },
+  {
+    "path": "params.extendedDynamicRange",
+    "doc": "Keep the print's extended range (ignored while scanFilm or digitalIntermediate).",
+    "type": "bool"
+  },
+  {
+    "path": "params.preflashExposure",
+    "doc": "Pre-flash, as a fraction of the light through clear base.",
+    "type": "number",
+    "min": 0.0,
+    "max": 0.03
+  },
+  {
+    "path": "params.printEffects",
+    "doc": "Off keeps only the paper's colour transform: no glare or pre-flash.",
+    "type": "bool"
+  },
+  {
+    "path": "params.contrastMask.active",
+    "doc": "Tone Mask (RFC-024).",
+    "type": "bool",
+    "readOnly": "The Tone Mask is withdrawn in this version and does not render."
+  },
+  {
+    "path": "params.contrastMask.highlights",
+    "doc": "Tone Mask: stops the print's highlights are raised.",
+    "type": "number",
+    "min": 0.0,
+    "max": 3.0,
+    "readOnly": "The Tone Mask is withdrawn in this version and does not render."
+  },
+  {
+    "path": "params.contrastMask.shadows",
+    "doc": "Tone Mask: stops the print's shadows are lowered.",
+    "type": "number",
+    "min": 0.0,
+    "max": 3.0,
+    "readOnly": "The Tone Mask is withdrawn in this version and does not render."
+  },
+  {
+    "path": "params.contrastMask.core",
+    "doc": "Tone Mask: half-width of the untouched core, stops.",
+    "type": "number",
+    "min": 0.0,
+    "max": 3.0,
+    "readOnly": "The Tone Mask is withdrawn in this version and does not render."
+  },
+  {
+    "path": "params.contrastMask.scale",
+    "doc": "Tone Mask radius, fraction of the long edge.",
+    "type": "number",
+    "min": 0.002,
+    "max": 0.12,
+    "readOnly": "The Tone Mask is withdrawn in this version and does not render."
+  },
+  {
+    "path": "params.contrastMask.scheme",
+    "doc": "The mask's extractor.",
+    "type": "choice",
+    "enum": [
+      "gaussian"
+    ],
+    "readOnly": "The Tone Mask is withdrawn in this version and does not render."
+  },
+  {
+    "path": "params.effects.grain",
+    "doc": "Grain strength, × the film's own.",
+    "type": "number",
+    "min": 0,
+    "max": 2
+  },
+  {
+    "path": "params.effects.grainLayered",
+    "doc": "Three-sub-layer grain model.",
+    "type": "bool"
+  },
+  {
+    "path": "params.effects.halation",
+    "doc": "Halation strength, × the film's own.",
+    "type": "number",
+    "min": 0,
+    "max": 4
+  },
+  {
+    "path": "params.effects.antihalationRemoved",
+    "doc": "The film without its anti-halation layer (a cine negative with the remjet removed).",
+    "type": "bool"
+  },
+  {
+    "path": "params.effects.highlightBoost",
+    "doc": "Stops added to the highlights before the halo is drawn; 0 is off.",
+    "type": "number",
+    "min": 0,
+    "max": 8
+  },
+  {
+    "path": "params.effects.scatter",
+    "doc": "In-emulsion scatter weight.",
+    "type": "number",
+    "min": 0,
+    "max": 1
+  },
+  {
+    "path": "params.effects.couplersActive",
+    "doc": "DIR couplers.",
+    "type": "bool"
+  },
+  {
+    "path": "params.effects.couplers",
+    "doc": "DIR coupler strength.",
+    "type": "number",
+    "min": 0,
+    "max": 1.5
+  },
+  {
+    "path": "params.effects.glare",
+    "doc": "Glare strength, × the paper's own.",
+    "type": "number",
+    "min": 0,
+    "max": 30
+  },
+  {
+    "path": "params.filmEdge.active",
+    "doc": "Film Edge: the film around the frame. On, the crop is held at the gate's aspect and the result is the film canvas, larger than the picture.",
+    "type": "bool"
+  },
+  {
+    "path": "params.filmEdge.format",
+    "doc": "The film and its gate.",
+    "type": "choice",
+    "choiceSource": "FilmEdgeFormat.allCases.filter(\\.isAvailable).map(\\.rawValue)"
+  },
+  {
+    "path": "params.filmEdge.view",
+    "doc": "The whole film width, or a filed carrier's sliver of rebate.",
+    "type": "choice",
+    "choiceSource": "FilmEdgeView.allCases.map(\\.rawValue)"
+  },
+  {
+    "path": "params.filmEdge.gate",
+    "doc": "The gate's shape family; auto lets the body pick.",
+    "type": "choice",
+    "choiceSource": "FilmEdgeGate.allCases.map(\\.rawValue)"
+  },
+  {
+    "path": "params.filmEdge.holes",
+    "doc": "What shows through the perforations.",
+    "type": "choice",
+    "choiceSource": "FilmEdgeHoles.allCases.map(\\.rawValue)"
+  },
+  {
+    "path": "params.filmEdge.cameraSeed",
+    "doc": "The camera body: gate, margins, holes, fog.",
+    "type": "integer",
+    "min": 0,
+    "max": 2147483647
+  },
+  {
+    "path": "params.filmEdge.frameSeed",
+    "doc": "This frame's advance and scan: weave, leaks.",
+    "type": "integer",
+    "min": 0,
+    "max": 2147483647
+  },
+  {
+    "path": "params.filmEdge.frameNumber",
+    "doc": "The frame number the edge print carries; 0 is the seed's draw. A new frame takes its place in the session.",
+    "type": "integer",
+    "min": 0,
+    "max": 99
+  },
+  {
+    "path": "params.filmEdge.fog",
+    "doc": "Edge fog strength; 0 is none.",
+    "type": "number",
+    "min": 0,
+    "max": 4
+  },
+  {
+    "path": "params.filmEdge.leaks",
+    "doc": "Spool light leaks; 0 is none.",
+    "type": "number",
+    "min": 0,
+    "max": 4
+  },
+  {
+    "path": "params.filmEdge.edgeText",
+    "doc": "The stock's edge print.",
+    "type": "choice",
+    "enum": [],
+    "readOnly": "Resolved by the app; use the corresponding UI control."
+  },
+  {
+    "path": "params.filmEdge.fNumber",
+    "doc": "The lens f-number, from EXIF; 0 is unknown.",
+    "type": "number",
+    "min": 0.0,
+    "max": 64.0,
+    "readOnly": "Resolved by the app; use the corresponding UI control."
+  },
+  {
+    "path": "params.filmEdge.framing",
+    "doc": "The crop the engine's frame was cut with.",
+    "type": "choice",
+    "enum": [],
+    "readOnly": "Resolved by the app; use the corresponding UI control."
+  },
+  {
+    "path": "params.filmEdge.seeded",
+    "doc": "Whether the frame has been given its seeds.",
+    "type": "bool",
+    "readOnly": "Resolved by the app; use the corresponding UI control."
+  },
+  {
+    "path": "params.filmEdge.pair",
+    "doc": "Whether this is a half-frame pair: two frames on one strip.",
+    "type": "bool",
+    "readOnly": "Resolved by the app; use the corresponding UI control."
+  },
+  {
+    "path": "params.dateBack.active",
+    "doc": "Date Back: a date or the shooting data exposed onto the film.",
+    "type": "bool"
+  },
+  {
+    "path": "params.dateBack.face",
+    "doc": "Seven segments, a 5×7 dot matrix, or shooting data.",
+    "type": "choice",
+    "choiceSource": "DateBackFace.allCases.map(\\.rawValue)"
+  },
+  {
+    "path": "params.dateBack.order",
+    "doc": "The date's order: month day year, or year month day.",
+    "type": "choice",
+    "choiceSource": "DateBackOrder.allCases.map(\\.rawValue)"
+  },
+  {
+    "path": "params.dateBack.placement",
+    "doc": "In the frame, or between frames (needs Film Edge).",
+    "type": "choice",
+    "choiceSource": "DateBackPlacement.allCases.map(\\.rawValue)"
+  },
+  {
+    "path": "params.dateBack.corner",
+    "doc": "The corner, in the camera's frame held level.",
+    "type": "choice",
+    "choiceSource": "DateBackCorner.allCases.map(\\.rawValue)"
+  },
+  {
+    "path": "params.dateBack.insetXMM",
+    "doc": "mm from the gate's side.",
+    "type": "number",
+    "min": 0,
+    "max": 30
+  },
+  {
+    "path": "params.dateBack.insetYMM",
+    "doc": "mm from the gate's top or bottom.",
+    "type": "number",
+    "min": 0,
+    "max": 30
+  },
+  {
+    "path": "params.dateBack.size",
+    "doc": "A scale on the face's own height.",
+    "type": "number",
+    "min": 0.4,
+    "max": 3
+  },
+  {
+    "path": "params.dateBack.brightnessEV",
+    "doc": "The lamp's exposure, stops over 18 % grey.",
+    "type": "number",
+    "min": -2,
+    "max": 8
+  },
+  {
+    "path": "params.dateBack.text",
+    "doc": "What is printed: the EXIF date, or the shooting data.",
+    "type": "choice",
+    "enum": [],
+    "readOnly": "Resolved by the app; use the corresponding UI control."
+  },
+  {
+    "path": "params.dateBack.customText",
+    "doc": "The user's own text, in place of the resolved one.",
+    "type": "choice",
+    "enum": [],
+    "readOnly": "Free text has no schema type yet; set it in the Date Back section."
+  },
+  {
+    "path": "params.dateBack.camera",
+    "doc": "The camera printing the date with no film edge, from Film Format.",
+    "type": "choice",
+    "choiceSource": "[FilmEdgeFormat.f135, .f135Half, .f645].map(\\.rawValue)",
+    "readOnly": "Resolved by the app; use the corresponding UI control."
+  },
+  {
+    "path": "params.dateBack.textB",
+    "doc": "A half-frame pair's second frame's date.",
+    "type": "choice",
+    "enum": [],
+    "readOnly": "Resolved by the app; use the corresponding UI control."
+  },
+  {
+    "path": "params.dateBack.withData",
+    "doc": "Print the shooting data beside the frame as well as the date (needs Film Edge).",
+    "type": "bool"
+  },
+  {
+    "path": "params.dateBack.dataText",
+    "doc": "The shooting data that prints beside the frame.",
+    "type": "choice",
+    "enum": [],
+    "readOnly": "Resolved by the app; use the corresponding UI control."
+  },
+  {
+    "path": "params.dateBack.framing",
+    "doc": "The crop the engine's frame is cut with for the date alone; empty for the whole frame.",
+    "type": "choice",
+    "enum": [],
+    "readOnly": "Resolved by the app; use the corresponding UI control."
+  },
+  {
+    "path": "params.dateBack.frameScale",
+    "doc": "The cut frame's long edge over the photograph's.",
+    "type": "number",
+    "min": 0.0,
+    "max": 1.0,
+    "readOnly": "Resolved by the app; use the corresponding UI control."
+  },
+  {
+    "path": "params.placementIsRight",
+    "doc": "On a half-frame pair, whether sceneLatitude is the second frame's.",
+    "type": "bool",
+    "readOnly": "Resolved by the app; use the corresponding UI control."
+  },
+  {
+    "path": "params.pairSplit",
+    "doc": "Where a half-frame pair's second frame starts along the piece; 0 for a frame.",
+    "type": "number",
+    "min": 0.0,
+    "max": 1.0,
+    "readOnly": "Resolved by the app; use the corresponding UI control."
+  },
+  {
+    "path": "adjustments.enabled",
+    "doc": "The whole grade on or off.",
+    "type": "bool"
+  },
+  {
+    "path": "adjustments.temperature",
+    "doc": "Print white balance, blue ↔ amber.",
+    "type": "number",
+    "min": -100.0,
+    "max": 100.0
+  },
+  {
+    "path": "adjustments.tint",
+    "doc": "Print white balance, green ↔ magenta.",
+    "type": "number",
+    "min": -100.0,
+    "max": 100.0
+  },
+  {
+    "path": "adjustments.exposure",
+    "doc": "Exposure on the scan, stops.",
+    "type": "number",
+    "min": -3.0,
+    "max": 3.0
+  },
+  {
+    "path": "adjustments.contrast",
+    "doc": "Contrast.",
+    "type": "number",
+    "min": -50.0,
+    "max": 50.0
+  },
+  {
+    "path": "adjustments.brightness",
+    "doc": "Brightness.",
+    "type": "number",
+    "min": -50.0,
+    "max": 50.0
+  },
+  {
+    "path": "adjustments.saturation",
+    "doc": "Saturation.",
+    "type": "number",
+    "min": -100.0,
+    "max": 100.0
+  },
+  {
+    "path": "adjustments.highlights",
+    "doc": "Highlight recovery.",
+    "type": "number",
+    "min": -100.0,
+    "max": 100.0
+  },
+  {
+    "path": "adjustments.shadows",
+    "doc": "Shadow recovery.",
+    "type": "number",
+    "min": -100.0,
+    "max": 100.0
+  },
+  {
+    "path": "adjustments.blackPoint",
+    "doc": "Black point.",
+    "type": "number",
+    "min": 0.0,
+    "max": 50.0
+  },
+  {
+    "path": "adjustments.whitePoint",
+    "doc": "White point.",
+    "type": "number",
+    "min": 0.0,
+    "max": 50.0
+  },
+  {
+    "path": "adjustments.vignette.amount",
+    "doc": "Vignetting; negative darkens the corners.",
+    "type": "number",
+    "min": -100.0,
+    "max": 100.0
+  },
+  {
+    "path": "adjustments.vignette.midpoint",
+    "doc": "Where the vignette starts.",
+    "type": "number",
+    "min": 0.0,
+    "max": 100.0
+  },
+  {
+    "path": "geometry.crop.x",
+    "doc": "Crop left, normalised, before rotation.",
+    "type": "number",
+    "min": 0.0,
+    "max": 1.0
+  },
+  {
+    "path": "geometry.crop.y",
+    "doc": "Crop top.",
+    "type": "number",
+    "min": 0.0,
+    "max": 1.0
+  },
+  {
+    "path": "geometry.crop.width",
+    "doc": "Crop width.",
+    "type": "number",
+    "min": 0.0,
+    "max": 1.0
+  },
+  {
+    "path": "geometry.crop.height",
+    "doc": "Crop height.",
+    "type": "number",
+    "min": 0.0,
+    "max": 1.0
+  },
+  {
+    "path": "geometry.angle",
+    "doc": "Straighten, degrees, clockwise.",
+    "type": "number",
+    "min": -45,
+    "max": 45
+  },
+  {
+    "path": "geometry.quarterTurns",
+    "doc": "Rotation in 90° steps.",
+    "type": "integer",
+    "min": 0.0,
+    "max": 3.0
+  },
+  {
+    "path": "geometry.flipH",
+    "doc": "Flip horizontally.",
+    "type": "bool"
+  },
+  {
+    "path": "geometry.flipV",
+    "doc": "Flip vertically.",
+    "type": "bool"
+  },
+  {
+    "path": "geometry.aspect",
+    "doc": "The crop's aspect lock.",
+    "type": "choice",
+    "choiceSource": "CropAspect.allCases.map(\\.rawValue)"
+  },
+  {
+    "path": "geometry.lockedRatio",
+    "doc": "The gate's ratio the crop is held to while Film Edge is on.",
+    "type": "number",
+    "min": 0.1,
+    "max": 10.0,
+    "readOnly": "Set by Film Edge's format."
+  },
+  {
+    "path": "geometry.intendedSize",
+    "doc": "The size a crop was last set to by hand.",
+    "type": "size",
+    "readOnly": "Kept by crop edits, as a drag keeps it."
+  },
+  {
+    "path": "decode.whiteBalance",
+    "doc": "Decode white balance. A preset sets temperature itself.",
+    "type": "choice",
+    "choiceSource": "DecodeSettings.WhiteBalance.allCases.map(\\.rawValue)"
+  },
+  {
+    "path": "decode.temperature",
+    "doc": "Decode Kelvin (makes whiteBalance Custom).",
+    "type": "number",
+    "min": 2000.0,
+    "max": 12000.0
+  },
+  {
+    "path": "decode.tint",
+    "doc": "Decode tint (makes whiteBalance Custom).",
+    "type": "number",
+    "min": -150.0,
+    "max": 150.0
+  },
+  {
+    "path": "decode.lensCorrection",
+    "doc": "The RAW's own lens correction. RAW files that carry one only.",
+    "type": "bool"
+  },
+  {
+    "path": "params.sceneLatitude.highlightPullBack",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitude.shadowPullBack",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitude.shadowPercentile",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitude.highlightPercentile",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitude.active",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitude.norm",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitude.highlightKnee",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitude.highlightRoom",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitude.shadowKnee",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitude.shadowRoom",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitude.rolloff",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitude.maxLift",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitudeOther.highlightPullBack",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitudeOther.shadowPullBack",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitudeOther.shadowPercentile",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitudeOther.highlightPercentile",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitudeOther.active",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitudeOther.norm",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitudeOther.highlightKnee",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitudeOther.highlightRoom",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitudeOther.shadowKnee",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitudeOther.shadowRoom",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitudeOther.rolloff",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "params.sceneLatitudeOther.maxLift",
+    "type": "number",
+    "min": -20,
+    "max": 20,
+    "doc": "Solved scene placement.",
+    "readOnly": "Use place_scene to solve a placement through the Fit."
+  },
+  {
+    "path": "adjustments.curves.rgb.points",
+    "type": "points",
+    "doc": "rgb curve: strictly ascending x from 0 to 1."
+  },
+  {
+    "path": "adjustments.curves.luma.points",
+    "type": "points",
+    "doc": "luma curve: strictly ascending x from 0 to 1."
+  },
+  {
+    "path": "adjustments.curves.red.points",
+    "type": "points",
+    "doc": "red curve: strictly ascending x from 0 to 1."
+  },
+  {
+    "path": "adjustments.curves.green.points",
+    "type": "points",
+    "doc": "green curve: strictly ascending x from 0 to 1."
+  },
+  {
+    "path": "adjustments.curves.blue.points",
+    "type": "points",
+    "doc": "blue curve: strictly ascending x from 0 to 1."
+  },
+  {
+    "path": "adjustments.colorBalance.master.hue",
+    "type": "number",
+    "min": 0,
+    "max": 360,
+    "doc": "master hue."
+  },
+  {
+    "path": "adjustments.colorBalance.master.saturation",
+    "type": "number",
+    "min": 0,
+    "max": 1,
+    "doc": "master saturation."
+  },
+  {
+    "path": "adjustments.colorBalance.master.luminance",
+    "type": "number",
+    "min": -1,
+    "max": 1,
+    "doc": "master luminance."
+  },
+  {
+    "path": "adjustments.colorBalance.shadows.hue",
+    "type": "number",
+    "min": 0,
+    "max": 360,
+    "doc": "shadows hue."
+  },
+  {
+    "path": "adjustments.colorBalance.shadows.saturation",
+    "type": "number",
+    "min": 0,
+    "max": 1,
+    "doc": "shadows saturation."
+  },
+  {
+    "path": "adjustments.colorBalance.shadows.luminance",
+    "type": "number",
+    "min": -1,
+    "max": 1,
+    "doc": "shadows luminance."
+  },
+  {
+    "path": "adjustments.colorBalance.midtones.hue",
+    "type": "number",
+    "min": 0,
+    "max": 360,
+    "doc": "midtones hue."
+  },
+  {
+    "path": "adjustments.colorBalance.midtones.saturation",
+    "type": "number",
+    "min": 0,
+    "max": 1,
+    "doc": "midtones saturation."
+  },
+  {
+    "path": "adjustments.colorBalance.midtones.luminance",
+    "type": "number",
+    "min": -1,
+    "max": 1,
+    "doc": "midtones luminance."
+  },
+  {
+    "path": "adjustments.colorBalance.highlights.hue",
+    "type": "number",
+    "min": 0,
+    "max": 360,
+    "doc": "highlights hue."
+  },
+  {
+    "path": "adjustments.colorBalance.highlights.saturation",
+    "type": "number",
+    "min": 0,
+    "max": 1,
+    "doc": "highlights saturation."
+  },
+  {
+    "path": "adjustments.colorBalance.highlights.luminance",
+    "type": "number",
+    "min": -1,
+    "max": 1,
+    "doc": "highlights luminance."
+  }
+]

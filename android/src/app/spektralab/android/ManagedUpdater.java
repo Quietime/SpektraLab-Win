@@ -1,0 +1,109 @@
+package app.spektralab.android;
+
+import android.app.Activity;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.Signature;
+import android.net.Uri;
+import android.os.ParcelFileDescriptor;
+import android.provider.Settings;
+import android.util.Log;
+import java.io.*;
+import java.math.BigInteger;
+import java.net.*;
+import java.nio.charset.StandardCharsets;
+import java.security.*;
+import java.security.spec.RSAPublicKeySpec;
+import java.util.*;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+import javax.net.ssl.HttpsURLConnection;
+import org.json.*;
+
+/** Signed, channel-bound app updates. The web bridge accepts no update URL or path. */
+public final class ManagedUpdater {
+ private static final Object STATE_LOCK=new Object();
+ private static final String API="https://api.github.com/repos/Quietime/SpektraLab-Win/releases/latest";
+ private static final int MAX_RELEASE=1024*1024,MAX_MANIFEST=64*1024,MAX_SIGNATURE=4*1024;
+ private static final long MAX_APK=512L*1024*1024;
+ private static final String MANIFEST="updates.json",SIGNATURE="updates.json.sig",APK="package.apk",READY="ready.json",PENDING="pending.json";
+ private final Context context;
+ private final File directory;
+ private final String channel;
+ private byte[] fetchedManifest,fetchedSignature;
+ public static final class Verified {
+  public final int build;public final String version,notes,name,url,sha256;public final long bytes;
+  Verified(int build,String version,String notes,String name,String url,String sha256,long bytes){this.build=build;this.version=version;this.notes=notes;this.name=name;this.url=url;this.sha256=sha256;this.bytes=bytes;}
+  JSONObject status(String channel,int current,boolean ready)throws JSONException{return new JSONObject().put("channel",channel).put("current_build",current).put("available",build>current).put("version",version).put("build",build).put("notes",notes).put("bytes",bytes).put("url",url).put("ready",ready);}
+ }
+ public ManagedUpdater(Context context)throws Exception{
+  this.context=context.getApplicationContext();ApplicationInfo info=this.context.getPackageManager().getApplicationInfo(this.context.getPackageName(),PackageManager.GET_META_DATA);
+  channel=info.metaData==null?null:info.metaData.getString("app.spektralab.update_channel");
+  if(!"android-phone-arm64".equals(channel)&&!"android-tablet-arm64".equals(channel))throw new IOException("Invalid installed update channel");
+  directory=new File(this.context.getFilesDir(),"Updates");if(!directory.isDirectory()&&!directory.mkdirs())throw new IOException("Cannot create managed update directory");
+ }
+ private File file(String name){return new File(directory,name);}
+ public String channel(){return channel;}
+ public String authority(){return context.getPackageName()+".updates";}
+ private int installedBuild()throws Exception{return (int)context.getPackageManager().getPackageInfo(context.getPackageName(),0).getLongVersionCode();}
+ private JSONObject base()throws Exception{return new JSONObject().put("channel",channel).put("current_build",installedBuild()).put("available",false).put("ready",false);}
+ private JSONObject failure(Exception e){try{return base().put("error",e.getMessage()==null?e.toString():e.getMessage());}catch(Exception ignored){return new JSONObject();}}
+ private static byte[] bounded(InputStream input,int max)throws IOException{ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] buffer=new byte[8192];int n;while((n=input.read(buffer))!=-1){if(n==0)continue;if(out.size()>max-n)throw new IOException("Update response exceeds size limit");out.write(buffer,0,n);}return out.toByteArray();}
+ private static String hex(byte[] bytes){StringBuilder out=new StringBuilder(bytes.length*2);for(byte b:bytes){out.append(Character.forDigit((b>>>4)&15,16));out.append(Character.forDigit(b&15,16));}return out.toString();}
+ private static byte[] unhex(String raw)throws IOException{if((raw.length()&1)!=0||!raw.matches("[0-9a-fA-F]+"))throw new IOException("Malformed hex data");byte[] value=new byte[raw.length()/2];for(int i=0;i<value.length;i++)value[i]=(byte)Integer.parseInt(raw.substring(2*i,2*i+2),16);return value;}
+ private static int integer(Object value,String field)throws IOException{if(!(value instanceof Integer||value instanceof Long))throw new IOException("Invalid integer "+field);long n=((Number)value).longValue();if(n<=0||n>Integer.MAX_VALUE)throw new IOException("Invalid integer "+field);return (int)n;}
+ private static long assetBytes(Object value)throws IOException{if(!(value instanceof Integer||value instanceof Long))throw new IOException("Invalid asset size");long n=((Number)value).longValue();if(n<=0||n>MAX_APK)throw new IOException("Invalid asset size");return n;}
+ private static String expectedName(String channel)throws IOException{if("android-phone-arm64".equals(channel))return "SpektraLab-Android-Phone.apk";if("android-tablet-arm64".equals(channel))return "SpektraLab-Android-Tablet.apk";throw new IOException("Unknown channel");}
+ private static void initialUrl(String value,String name)throws IOException{try{URI uri=new URI(value);String prefix="/Quietime/SpektraLab-Win/releases/download/",path=uri.getRawPath();if(!"https".equals(uri.getScheme())||!"github.com".equals(uri.getHost())||uri.getRawUserInfo()!=null||uri.getPort()!=-1||uri.getRawQuery()!=null||uri.getRawFragment()!=null||value.indexOf('\\')>=0||path==null||!path.startsWith(prefix)||path.indexOf('%')>=0)throw new IOException("Unexpected update URL");String suffix=path.substring(prefix.length());int separator=suffix.indexOf('/');if(separator<=0||separator!=suffix.lastIndexOf('/')||!suffix.substring(separator+1).equals(name)||!suffix.substring(0,separator).matches("[A-Za-z0-9][A-Za-z0-9._-]*"))throw new IOException("Unexpected update URL");}catch(URISyntaxException e){throw new IOException("Malformed update URL",e);}}
+ /** Fixture entry point; signature covers exact raw JSON bytes before reading any asset fields. */
+ public static Verified verifyManifest(byte[] raw,byte[] signatureHex,byte[] publicKeyJson,String channel,int installed,boolean requireNew)throws Exception{
+  if(raw.length==0||raw.length>MAX_MANIFEST||signatureHex.length==0||signatureHex.length>MAX_SIGNATURE)throw new IOException("Invalid signed update size");
+  JSONObject key=new JSONObject(new String(publicKeyJson,StandardCharsets.UTF_8));if(!"RSA-PKCS1-SHA256".equals(key.getString("algorithm")))throw new IOException("Unsupported update key algorithm");
+  BigInteger modulus=new BigInteger(1,unhex(key.getString("modulus"))),exponent=new BigInteger(1,unhex(key.getString("exponent")));
+  if(modulus.bitLength()!=3072||!exponent.equals(BigInteger.valueOf(65537)))throw new IOException("Invalid update public key");
+  byte[] signature=unhex(new String(signatureHex,StandardCharsets.US_ASCII).trim());if(signature.length!=384)throw new IOException("Invalid update signature size");
+  PublicKey publicKey=KeyFactory.getInstance("RSA").generatePublic(new RSAPublicKeySpec(modulus,exponent));java.security.Signature verifier=java.security.Signature.getInstance("SHA256withRSA");verifier.initVerify(publicKey);verifier.update(raw);if(!verifier.verify(signature))throw new IOException("Update signature verification failed");
+  JSONObject manifest=new JSONObject(new String(raw,StandardCharsets.UTF_8));if(integer(manifest.get("schema"),"schema")!=1)throw new IOException("Unknown update schema");int build=integer(manifest.get("build"),"build");if(requireNew&&build<=installed)throw new IOException("No newer update");Object versionValue=manifest.get("version");if(!(versionValue instanceof String)||((String)versionValue).trim().isEmpty())throw new IOException("Missing update version");String version=(String)versionValue;
+  JSONObject channels=manifest.getJSONObject("channels");channels.getJSONObject("windows-x64");channels.getJSONObject("android-phone-arm64");channels.getJSONObject("android-tablet-arm64");JSONObject asset=channels.getJSONObject(channel);Object nameValue=asset.get("name"),urlValue=asset.get("url"),shaValue=asset.get("sha256");if(!(nameValue instanceof String)||!(urlValue instanceof String)||!(shaValue instanceof String))throw new IOException("Invalid update asset metadata");String expected=expectedName(channel),name=(String)nameValue,url=(String)urlValue,sha=(String)shaValue;long bytes=assetBytes(asset.get("bytes"));
+  if(!name.equals(expected))throw new IOException("Update filename does not match channel");initialUrl(url,name);if(!sha.matches("[0-9a-fA-F]{64}"))throw new IOException("Malformed update digest");
+  return new Verified(build,version,manifest.optString("notes",""),name,url,sha.toLowerCase(Locale.ROOT),bytes);
+ }
+ private byte[] key()throws IOException{try(InputStream in=context.getAssets().open("update-public-key.json")){return bounded(in,8192);}}
+ private Verified verify(byte[] raw,byte[] sig,boolean requireNew)throws Exception{return verifyManifest(raw,sig,key(),channel,installedBuild(),requireNew);}
+ private static HttpsURLConnection connect(String url)throws Exception{URL current=new URL(url);for(int i=0;i<=5;i++){
+  if(!"https".equals(current.getProtocol()))throw new IOException("Update redirect left HTTPS");HttpsURLConnection connection=(HttpsURLConnection)current.openConnection();connection.setConnectTimeout(8000);connection.setReadTimeout(15000);connection.setInstanceFollowRedirects(false);connection.setRequestProperty("User-Agent","SpektraLab-LightTable-Android-Updater");connection.setRequestProperty("Accept","application/octet-stream, application/json");int code=connection.getResponseCode();
+  if(code==301||code==302||code==303||code==307||code==308){String location=connection.getHeaderField("Location");connection.disconnect();if(location==null)throw new IOException("Update redirect has no location");current=new URL(current,location);continue;}return connection;
+ }throw new IOException("Too many update redirects");}
+ private static byte[] fetch(String url,int max)throws Exception{HttpsURLConnection connection=connect(url);try{if(connection.getResponseCode()!=200)throw new IOException("GitHub HTTP "+connection.getResponseCode());try(InputStream in=connection.getInputStream()){return bounded(in,max);}}finally{connection.disconnect();}}
+ /** A 404 is normal only for the fixed releases/latest request, never for an asset. */
+ static byte[] latestReleaseResponse(int code,InputStream body)throws IOException{if(code==404)return null;if(code!=200)throw new IOException("GitHub HTTP "+code);return bounded(body,MAX_RELEASE);}
+ private static byte[] latestRelease()throws Exception{HttpsURLConnection connection=connect(API);try{int code=connection.getResponseCode();if(code==404)return latestReleaseResponse(code,null);try(InputStream in=code==200?connection.getInputStream():null){return latestReleaseResponse(code,in);}}finally{connection.disconnect();}}
+ private static String releaseAsset(JSONObject release,String name)throws Exception{JSONArray assets=release.getJSONArray("assets");String url=null;for(int i=0;i<assets.length();i++){JSONObject asset=assets.getJSONObject(i);if(name.equals(asset.optString("name"))){if(url!=null)throw new IOException("Duplicate update asset");url=asset.getString("browser_download_url");}}if(url==null)throw new IOException("Missing release asset "+name);initialUrl(url,name);return url;}
+ private Verified remote()throws Exception{byte[] releaseBody=latestRelease();if(releaseBody==null)return null;JSONObject release=new JSONObject(new String(releaseBody,StandardCharsets.UTF_8));if(!(release.get("draft") instanceof Boolean)||!(release.get("prerelease") instanceof Boolean)||release.getBoolean("draft")||release.getBoolean("prerelease"))throw new IOException("Latest release is not published");byte[] raw=fetch(releaseAsset(release,MANIFEST),MAX_MANIFEST),sig=fetch(releaseAsset(release,SIGNATURE),MAX_SIGNATURE);Verified verified=verify(raw,sig,false);fetchedManifest=raw;fetchedSignature=sig;return verified;}
+ private JSONObject noPublishedRelease()throws Exception{if(!file(READY).isFile())return base();return validateReady(false).status(channel,installedBuild(),true);}
+ public JSONObject check(){synchronized(STATE_LOCK){try{Verified verified=remote();if(verified==null)return noPublishedRelease();boolean ready=false;try{Verified local=validateReady(false);ready=local.build==verified.build&&local.sha256.equals(verified.sha256);}catch(Exception ignored){}return verified.status(channel,installedBuild(),ready);}catch(Exception e){try{return validateReady(false).status(channel,installedBuild(),true).put("error",e.getMessage()==null?e.toString():e.getMessage());}catch(Exception ignored){return failure(e);}}}}
+ private static void atomic(File target,byte[] bytes)throws Exception{File tmp=File.createTempFile(".update-",".part",target.getParentFile());try{try(FileOutputStream out=new FileOutputStream(tmp)){out.write(bytes);out.getFD().sync();}if(!tmp.renameTo(target))throw new IOException("Cannot commit update state");}finally{tmp.delete();}}
+ private void download(Verified verified,File temp)throws Exception{HttpsURLConnection connection=connect(verified.url);try{if(connection.getResponseCode()!=200)throw new IOException("GitHub HTTP "+connection.getResponseCode());MessageDigest digest=MessageDigest.getInstance("SHA-256");long count=0;try(InputStream in=connection.getInputStream();FileOutputStream out=new FileOutputStream(temp)){byte[] buffer=new byte[65536];int n;while((n=in.read(buffer))!=-1){if(n==0)continue;count+=n;if(count>verified.bytes||count>MAX_APK)throw new IOException("Update package exceeds signed size");digest.update(buffer,0,n);out.write(buffer,0,n);}out.getFD().sync();}if(count!=verified.bytes||!hex(digest.digest()).equals(verified.sha256))throw new IOException("Update package digest or size mismatch");}finally{connection.disconnect();}}
+ public JSONObject prepare(){synchronized(STATE_LOCK){File temp=null;try{Verified verified=remote();if(verified==null)return noPublishedRelease();if(verified.build<=installedBuild())return verified.status(channel,installedBuild(),false);temp=File.createTempFile(".package-",".part",directory);download(verified,temp);verifyArchive(temp,verified);atomic(file(MANIFEST),fetchedManifest);atomic(file(SIGNATURE),fetchedSignature);if(!temp.renameTo(file(APK)))throw new IOException("Cannot commit staged update");temp=null;atomic(file(READY),new JSONObject().put("build",verified.build).put("channel",channel).put("sha256",verified.sha256).toString().getBytes(StandardCharsets.UTF_8));return verified.status(channel,installedBuild(),true);}catch(Exception e){return failure(e);}finally{if(temp!=null)temp.delete();}}}
+ private static String signerIdentity(Signature[] signatures)throws Exception{if(signatures==null||signatures.length==0)throw new IOException("Package has no verified signing certificate");ArrayList<String> fingerprints=new ArrayList<>();for(Signature signature:signatures)fingerprints.add(hex(MessageDigest.getInstance("SHA-256").digest(signature.toByteArray())));Collections.sort(fingerprints);return String.join(":",fingerprints);}
+ /** API 29 may omit signingInfo for an archive. GET_SIGNATURES is requested explicitly;
+     if neither verified PackageManager field exists, installation is refused. */
+ private static Signature[] signers(PackageInfo info)throws IOException{if(info==null)throw new IOException("Package metadata is unavailable");if(info.signingInfo!=null){Signature[] current=info.signingInfo.getApkContentsSigners();if(current!=null&&current.length>0)return current;}if(info.signatures!=null&&info.signatures.length>0)return info.signatures;throw new IOException("Package signing identity is unavailable");}
+ private String installedIdentity()throws Exception{PackageInfo info=context.getPackageManager().getPackageInfo(context.getPackageName(),PackageManager.GET_SIGNING_CERTIFICATES|PackageManager.GET_SIGNATURES);return signerIdentity(signers(info));}
+ private void verifyArchive(File apk,Verified verified)throws Exception{PackageManager pm=context.getPackageManager();PackageInfo archive=pm.getPackageArchiveInfo(apk.getAbsolutePath(),PackageManager.GET_SIGNING_CERTIFICATES|PackageManager.GET_SIGNATURES|PackageManager.GET_META_DATA);
+  if(archive==null||!context.getPackageName().equals(archive.packageName))throw new IOException("Update APK package mismatch");if(archive.getLongVersionCode()!=verified.build)throw new IOException("Update APK version mismatch");
+  if(archive.applicationInfo==null||archive.applicationInfo.metaData==null||!channel.equals(archive.applicationInfo.metaData.getString("app.spektralab.update_channel")))throw new IOException("Update APK channel mismatch");
+  if(!installedIdentity().equals(signerIdentity(signers(archive))))throw new IOException("Update APK signing certificate mismatch");
+ }
+ public static void verifyPackageDigest(File apk,long expectedBytes,String expectedSha256)throws Exception{if(expectedBytes<=0||expectedBytes>MAX_APK||expectedSha256==null||!expectedSha256.matches("[0-9a-fA-F]{64}")||!apk.isFile()||apk.length()!=expectedBytes)throw new IOException("Staged package size or digest metadata mismatch");MessageDigest digest=MessageDigest.getInstance("SHA-256");try(InputStream in=new FileInputStream(apk)){byte[] buffer=new byte[65536];int n;while((n=in.read(buffer))!=-1)digest.update(buffer,0,n);}if(!hex(digest.digest()).equals(expectedSha256.toLowerCase(Locale.ROOT)))throw new IOException("Staged package digest mismatch");}
+ public Verified validateReady(boolean archiveCheck)throws Exception{synchronized(STATE_LOCK){if(!file(READY).isFile())throw new IOException("No prepared update");byte[] raw,sig;try(InputStream in=new FileInputStream(file(MANIFEST))){raw=bounded(in,MAX_MANIFEST);}try(InputStream in=new FileInputStream(file(SIGNATURE))){sig=bounded(in,MAX_SIGNATURE);}Verified verified=verify(raw,sig,true);JSONObject ready;try(InputStream in=new FileInputStream(file(READY))){ready=new JSONObject(new String(bounded(in,4096),StandardCharsets.UTF_8));}if(integer(ready.get("build"),"ready build")!=verified.build||!channel.equals(ready.getString("channel"))||!verified.sha256.equals(ready.getString("sha256")))throw new IOException("Prepared update state mismatch");verifyPackageDigest(file(APK),verified.bytes,verified.sha256);if(archiveCheck)verifyArchive(file(APK),verified);return verified;}}
+ private static void launch(Activity activity,Intent intent)throws Exception{FutureTask<Void> task=new FutureTask<>(()->{activity.startActivity(intent);return null;});activity.runOnUiThread(task);task.get(10,TimeUnit.SECONDS);}
+ public JSONObject install(Activity activity){synchronized(STATE_LOCK){try{Verified verified=validateReady(true);if(!context.getPackageManager().canRequestPackageInstalls()){launch(activity,new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,Uri.parse("package:"+context.getPackageName())));return verified.status(channel,installedBuild(),true).put("error","Allow installation from this app, then tap Install again");}atomic(file(PENDING),new JSONObject().put("build",verified.build).put("channel",channel).put("signing",installedIdentity()).toString().getBytes(StandardCharsets.UTF_8));Intent intent=new Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse("content://"+authority()+"/package"),"application/vnd.android.package-archive").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);launch(activity,intent);return verified.status(channel,installedBuild(),true).put("installation_pending",true);}catch(Exception e){return failure(e);}}}
+ public static boolean shouldCleanPending(int installedBuild,int signedTarget,String currentSigning,String pendingSigning){return installedBuild>=signedTarget&&currentSigning!=null&&currentSigning.equals(pendingSigning);}
+ public void cleanupAfterInstalled(){synchronized(STATE_LOCK){try{if(!file(PENDING).isFile())return;JSONObject pending;try(InputStream in=new FileInputStream(file(PENDING))){pending=new JSONObject(new String(bounded(in,4096),StandardCharsets.UTF_8));}int target=integer(pending.get("build"),"pending build");if(!channel.equals(pending.getString("channel"))||!shouldCleanPending(installedBuild(),target,installedIdentity(),pending.getString("signing")))return;byte[] raw,sig;try(InputStream in=new FileInputStream(file(MANIFEST))){raw=bounded(in,MAX_MANIFEST);}try(InputStream in=new FileInputStream(file(SIGNATURE))){sig=bounded(in,MAX_SIGNATURE);}if(verify(raw,sig,false).build!=target)return;for(String name:new String[]{PENDING,READY,APK,MANIFEST,SIGNATURE})if(!file(name).delete()&&file(name).exists())Log.w("SpektraLab","Could not clean managed update "+name);}catch(Exception e){Log.w("SpektraLab","Keeping pending update",e);}}}
+ public ParcelFileDescriptor openValidatedPackage()throws Exception{synchronized(STATE_LOCK){validateReady(true);return ParcelFileDescriptor.open(file(APK),ParcelFileDescriptor.MODE_READ_ONLY);}}
+ public File validatedApk()throws Exception{synchronized(STATE_LOCK){validateReady(true);return file(APK);}}
+}

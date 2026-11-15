@@ -1,0 +1,13 @@
+{
+  "productName": "SpektraLab Parity Preview",
+  "identifier": "app.spektralab.parity-preview",
+  "build": { "beforeBuildCommand": "" },
+  "app": {
+    "windows": [{
+      "label": "main", "title": "SpektraLab Parity Preview",
+      "width": 1600, "height": 960, "minWidth": 1100, "minHeight": 680,
+      "theme": "Dark", "backgroundColor": "#2b2b2b", "dragDropEnabled": true
+    }]
+  },
+  "bundle": { "active": false }
+}

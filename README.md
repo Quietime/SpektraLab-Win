@@ -1,1 +1,37 @@
-# SpektraLab-Win
+# SpektraLab Windows / Android
+
+面向 macOS SpektraLab 1.3.3 的社区适配，包含 Windows x64、Android 手机和平板，以及胶片看片台。原项目说明保留在 [README.upstream.md](README.upstream.md)，许可见 [license/LICENSE](license/LICENSE)。
+
+**当前为开发中的源码快照，版本 `1.3.3-lighttable.3` / build `13304`，尚未发布通过完整验收的安装包。源码推送不表示测试已全部通过。**
+
+## 当前状态（2026-11-15）
+
+| 范围 | 已执行验证 | 待完成 |
+| --- | --- | --- |
+| 前端 | 154 项单测通过，4 项需额外原生输入的测试跳过；37 个不同界面用例在分段运行和修复复测后全部通过 | 随实际改动进行相关复测 |
+| 原生引擎 | Linux Vulkan 14 项检查；Linux 与 Wine 下 Windows 引擎均通过 1000 文件探测、32 次连续渲染、大图预算拒绝和同进程恢复 | 真实 RTX / Adreno 设备验证 |
+| Windows | 修复前基线的 22 项 Rust 测试、命令行、原生 Vulkan、E 盘默认安装、快捷方式、卸载与数据保留检查通过 | 更新助手缺少相邻 WebView2 加载库的问题已修复到源码，需重编译、复测并重建安装包 |
+| Android 手机 | 双 ABI 构建、签名、渠道、公钥、16KB 对齐检查通过；API29 模拟器已通过 106 项检查 | 看片台界面阶段出现超时及系统 ANR，完整用例尚未通过，正在定位 |
+| Android 平板 | APK 构建及签名、渠道、公钥、16KB 对齐检查通过 | 完整模拟器用例及真实系统升级验证 |
+
+界面测试使用软件渲染；Wine 不等于真实 Windows/WebView2 验收。当前没有连接用户的 RTX 4080 电脑、小米 17 Ultra 或小米平板 6S Pro，不能据此宣称实机帧率或性能。
+
+## 功能与平台
+
+- Windows 默认安装到 `E:\SpektraLab`，正式构建内嵌界面资源，无需本地开发服务器；运行需要 WebView2 和支持 Vulkan 的显卡。
+- Android 查询设备显示模式，请求最高分辨率及该分辨率下的最高刷新率，按实际像素密度绘制；实际刷新率由系统、WebView 和温控共同决定。
+- 看片台包含照片托盘、摆放、灯光与亮度、片套、放大、幻灯片及分块布局保存。选中照片显示画布输出，其他预览标明来源。
+- 图片缓存和并发有界；Vulkan 分配计账、留出预算并回收空闲缓存；预算不足时明确报错，避免无限分配。
+- 三个更新渠道使用签名清单、SHA-256、包身份和安装结果校验。Android 保留系统安装确认，确认成功后清理应用自身下载的更新包。更新合同见 [CONTRACT.md](distribution/updater/CONTRACT.md)。
+
+Android 新包名为 `app.spektralab.lighttable`，与旧 `app.spektralab.android` 并行安装，保留旧应用及其数据。手机、平板是同一包名和证书的不同渠道，分别用于不同设备。
+
+## 源码与构建
+
+- [Windows 构建与验证](distribution/windows/README.md)
+- [Android 构建](android/README.zh-CN.md)
+- [Android 模拟器环境](android/EMULATOR-SETUP.md)
+- [原生压力测试](distribution/stress/README.md)
+- [更新合同](distribution/updater/CONTRACT.md)
+
+本仓库不包含私钥、签名口令、维护备份、构建缓存或未经验收的安装文件。公开更新公钥是验证所需的公开信息。完整安装包和对应校验回执会在验证完成后放入 Releases。

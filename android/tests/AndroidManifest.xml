@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="app.spektralab.checks">
+ <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="35"/>
+ <application android:label="SpektraLab checks"><provider android:name=".FixtureProvider" android:authorities="app.spektralab.checks.fixture" android:exported="true" /></application>
+ <instrumentation android:name=".Checks" android:targetPackage="app.spektralab.lighttable" android:functionalTest="true"/>
+</manifest>

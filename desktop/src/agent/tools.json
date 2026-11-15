@@ -1,0 +1,243 @@
+[
+  {
+    "name": "get_schema",
+    "command": "schema",
+    "description": "Every editable field: its path in the edit document, type, range and meaning. Read this before editing.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_stocks",
+    "command": "stocks",
+    "description": "The films and papers by id. A film's declaredPaper is the one it is printed on by default; a slide film (type positive) is scanned, not printed.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_recipes",
+    "command": "recipes",
+    "description": "The person's export recipes, by name.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "describe_image",
+    "command": "info",
+    "description": "Open an image and describe it: size, RAW or not, camera white balance, EXIF, the film and paper it is set to, and whether it has been processed.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute photograph path."
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_edit",
+    "command": "get",
+    "description": "The image's current edit document {params, adjustments, geometry, decode}, as stored in its sidecar and shown in the app.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute photograph path."
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "edit_image",
+    "command": "edit",
+    "description": "Change the edit with a JSON merge patch over the edit document, e.g. {\"params\": {\"filmStock\": \"kodak_portra_160\"}, \"adjustments\": {\"exposure\": 0.3}}. Only the keys given change. Unknown keys, read-only fields and out-of-range values are refused and nothing is written. The edit is saved where the app reads it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute photograph path."
+        },
+        "patch": {
+          "type": "object"
+        },
+        "preview": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "required": [
+        "path",
+        "patch"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "reset_edit",
+    "command": "reset",
+    "description": "Put the film, print, grade and geometry back to their defaults. The decode (white balance, lens correction) stays.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute photograph path."
+        },
+        "preview": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "process_image",
+    "command": "process",
+    "description": "The Process button: develop, meter and solve the enlarger's filter pack for the chosen film and paper. Do this once before judging colour; it resets the Y/M filter shifts.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute photograph path."
+        },
+        "preview": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "measure_latitude",
+    "command": "latitude",
+    "description": "How much of the scene the film and paper hold, in stops from mid-grey: the medium's boundaries, the fraction of the frame beyond each, and the pull-backs the engine suggests.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute photograph path."
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "place_scene",
+    "command": "place",
+    "description": "Scene Placement: pull the scene's highlights and/or shadows (stops, 0 = off) into the medium, through the engine's Fit. A placement the Fit refuses is not applied. Both 0 removes the placement.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute photograph path."
+        },
+        "highlight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 6
+        },
+        "shadow": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 6
+        },
+        "preview": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "required": [
+        "path",
+        "highlight",
+        "shadow"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "preview_image",
+    "command": "preview",
+    "description": "Render the finished print as a small sRGB JPEG and return it, so you can see what the edit looks like.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute photograph path."
+        },
+        "long_edge": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 4096
+        },
+        "output": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "export_image",
+    "command": "export",
+    "description": "Export the finished print with one of the person's recipes (the first when none is named), optionally into another folder. Returns the files written.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute photograph path."
+        },
+        "recipe": {
+          "type": "string"
+        },
+        "folder": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false
+    }
+  }
+]
