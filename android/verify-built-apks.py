@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import zipfile
 
@@ -79,7 +80,12 @@ def verify(flavor):
 def main():
     arm64 = ROOT / "build/android-arm64-v8a/engine/host/spektralab-host"
     readelf = SDK / "ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
-    segments = [line for line in command(readelf, "-l", arm64).splitlines() if line.lstrip().startswith("LOAD ")]
+    if not readelf.is_file():
+        host_readelf = shutil.which("readelf")
+        if host_readelf is None:
+            raise FileNotFoundError("Need NDK llvm-readelf or host readelf for ELF alignment proof")
+        readelf = Path(host_readelf)
+    segments = [line for line in command(readelf, "-W", "-l", arm64).splitlines() if line.lstrip().startswith("LOAD ")]
     if not segments or any(line.split()[-1] != "0x4000" for line in segments):
         raise ValueError("ARM64 LOAD segment alignment is not 16 KiB")
     reports = [verify(flavor) for flavor in ("phone", "tablet")]

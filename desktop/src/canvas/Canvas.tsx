@@ -51,7 +51,7 @@ import {
   useSession,
 } from '../state/session';
 import { HistogramOverlay, histogramOf, type Histogram } from './histogram';
-import { publishOutput } from './output';
+import { boundedOutputSize, publishOutput } from './output';
 import { useI18n } from '../i18n';
 import { useTable } from '../lighttable/model';
 
@@ -247,18 +247,20 @@ export function Canvas() {
   // The output, small: navigator and histogram (the canvas's frame, trap 33).
   useEffect(() => {
     const r = gl.current;
-    if (!r || !printNative || !frameImages.print) {
+    const availablePrint = frameImages.print;
+    if (!r || !printNative || !availablePrint) {
       publishOutput(null);
       setHistogram(null);
       return;
     }
     const t = setTimeout(() => {
       const outputGeometry = frame ? GEOMETRY_DEFAULT : savedGeometry;
-      const out = outputSize(outputGeometry, printNative);
+      const out = lightTableOpen ? boundedOutputSize(outputGeometry, availablePrint) : outputSize(outputGeometry, printNative);
       // Small for the navigator and the histogram; larger while the export
-      // page shows it as the proof.
+      // page shows it as the proof. LightTable stays at the tier's available
+      // pixels, up to 4096, so a low-resolution print preview is not enlarged.
       const edge = lightTableOpen ? 4096 : sessionStore.getState().exportOpen ? 1400 : 256;
-      const k = edge / Math.max(out.width, out.height);
+      const k = lightTableOpen ? 1 : edge / Math.max(out.width, out.height);
       const w = Math.max(1, Math.round(out.width * k));
       const h = Math.max(1, Math.round(out.height * k));
       const state: DrawState = {
