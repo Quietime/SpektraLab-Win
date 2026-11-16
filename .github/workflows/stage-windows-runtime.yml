@@ -1,0 +1,164 @@
+# Manual staging only: build from an exact source ref into an unpublished draft.
+name: Stage Windows runtime in draft
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Exact source commit to compile
+        required: true
+        default: a4d234c494864908f2b9166b5dfe4fa576be237d
+permissions:
+  contents: write
+jobs:
+  windows-gnu-runtime:
+    name: Windows GNU GUI, CLI and embedded UI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+
+      - name: MinGW cross tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-mingw-w64-x86-64-posix g++-mingw-w64-x86-64-posix \
+            binutils-mingw-w64-x86-64 file python3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.90.0'
+          targets: x86_64-pc-windows-gnu
+
+      - name: Install and freeze frontend
+        working-directory: desktop
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build:web
+
+      - name: Compile Windows GUI and CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/ci-windows133-runtime
+          cd desktop/src-tauri
+          TAURI_CONFIG="$(cat tauri.windows133.json)" \
+            cargo build --target x86_64-pc-windows-gnu --release \
+              --features custom-protocol --locked --bins -j2 \
+              2>&1 | tee "$GITHUB_WORKSPACE/artifacts/ci-windows133-runtime/cargo-build.log"
+
+      - name: Verify linked embedded frontend
+        run: node distribution/windows/check-embedded-release.mjs
+
+      - name: Compile Windows unit-test PE if disk permits
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/ci-windows133-runtime
+          if [ "$(df -Pk . | awk 'NR==2 {print $4}')" -lt 4194304 ]; then
+            echo 'Skipped unit-test PE compile: less than 4 GiB free after GUI build' \
+              | tee artifacts/ci-windows133-runtime/test-pe-status.txt
+            exit 0
+          fi
+          cd desktop/src-tauri
+          TAURI_CONFIG="$(cat tauri.windows133.json)" \
+            cargo test --target x86_64-pc-windows-gnu --release \
+              --features custom-protocol --locked --lib --no-run -j2 \
+              2>&1 | tee "$GITHUB_WORKSPACE/artifacts/ci-windows133-runtime/cargo-test-compile.log"
+          echo 'Compiled only; not executed on Linux' \
+            > "$GITHUB_WORKSPACE/artifacts/ci-windows133-runtime/test-pe-status.txt"
+
+      - name: Freeze runtime inputs and source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, os, shutil, struct, zipfile
+          from pathlib import Path
+
+          root = Path(os.environ['GITHUB_WORKSPACE'])
+          out = root / 'artifacts/ci-windows133-runtime'
+          target = root / 'desktop/src-tauri/target/x86_64-pc-windows-gnu/release'
+          out.mkdir(parents=True, exist_ok=True)
+          for name in ('spektralab.exe', 'spektralab-cli.exe'):
+              source = target / name
+              assert source.is_file(), f'missing {source}'
+              shutil.copyfile(source, out / name)
+
+          registry = Path(os.environ.get('CARGO_HOME', str(Path.home() / '.cargo'))) / 'registry/src'
+          candidates = sorted(registry.glob('*/webview2-com-sys-0.39.1/**/WebView2Loader.dll'))
+          x64 = []
+          for path in candidates:
+              data = path.read_bytes()
+              if len(data) < 64 or data[:2] != b'MZ':
+                  continue
+              offset = struct.unpack_from('<I', data, 0x3c)[0]
+              if offset + 6 > len(data) or data[offset:offset + 4] != b'PE\0\0':
+                  continue
+              if struct.unpack_from('<H', data, offset + 4)[0] == 0x8664:
+                  x64.append((path, data))
+          assert x64, 'locked webview2-com-sys 0.39.1 has no x64 WebView2Loader.dll'
+          assert len({hashlib.sha256(data).digest() for _, data in x64}) == 1, 'ambiguous x64 loader DLLs'
+          assert len(x64[0][1]) <= 16 * 1024 * 1024, 'loader exceeds helper staging limit'
+          (out / 'WebView2Loader.dll').write_bytes(x64[0][1])
+
+          dist = root / 'desktop/dist'
+          files = sorted(p for p in dist.rglob('*') if p.is_file())
+          assert files and (dist / 'index.html').is_file(), 'frontend dist is missing'
+          with zipfile.ZipFile(out / 'WindowsFrozenDist.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
+              for path in files:
+                  archive.write(path, path.relative_to(dist).as_posix())
+          shutil.copyfile(root / 'artifacts/WINDOWS133-EMBEDDED-UI-CHECK.json',
+                          out / 'WINDOWS133-EMBEDDED-UI-CHECK.json')
+          test_status = (out / 'test-pe-status.txt').read_text().strip()
+          test_pes = sorted((target / 'deps').glob('spektralab_lib-*.exe'))
+          if test_status.startswith('Compiled'):
+              assert len(test_pes) == 1, f'expected one compiled unit-test PE, got {len(test_pes)}'
+              shutil.copyfile(test_pes[0], out / test_pes[0].name)
+          names = ['spektralab.exe', 'spektralab-cli.exe', 'WebView2Loader.dll',
+                   'WindowsFrozenDist.zip', 'WINDOWS133-EMBEDDED-UI-CHECK.json']
+          if test_status.startswith('Compiled'):
+              names.append(test_pes[0].name)
+          receipt = {
+              'source_commit': __import__('subprocess').check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'target': 'x86_64-pc-windows-gnu',
+              'build': 13304,
+              'test_pe': test_status,
+              'files': {name: hashlib.sha256((out / name).read_bytes()).hexdigest() for name in names},
+          }
+          (out / 'SOURCE-STATUS.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          print(json.dumps(receipt, indent=2))
+          PY
+
+      - name: Stage runtime component in unpublished draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_sha="$(git rev-parse HEAD)"
+          tag=v1.3.3-lighttable.3
+          asset=SpektraLab-Windows-13304-Runtime-validation.zip
+          python3 - <<'PYZIP'
+          from pathlib import Path
+          import zipfile
+          root=Path('artifacts/ci-windows133-runtime')
+          with zipfile.ZipFile('artifacts/SpektraLab-Windows-13304-Runtime-validation.zip','w',zipfile.ZIP_DEFLATED) as archive:
+              for path in sorted(root.rglob('*')):
+                  if path.is_file(): archive.write(path,path.relative_to(root))
+          PYZIP
+          if gh release view "$tag" --json isDraft --jq .isDraft > /tmp/release-draft-state 2>/dev/null; then
+            test "$(cat /tmp/release-draft-state)" = true || { echo 'Refusing to change a published release'; exit 1; }
+          else
+            printf '%s\n' 'Development draft. Runtime components only; installer and device verification are incomplete. Do not publish until all validation gates pass.' > /tmp/draft-notes.md
+            gh release create "$tag" --draft --target "$source_sha" --title 'SpektraLab LightTable.3 — validation pending' --notes-file /tmp/draft-notes.md
+          fi
+          gh release upload "$tag" "artifacts/$asset" --clobber
+          printf 'Staged runtime from %s in unpublished draft. No release publication performed.\n' "$source_sha"
