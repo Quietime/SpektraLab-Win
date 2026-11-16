@@ -77,7 +77,7 @@ jobs:
           $names = @('SpektraLab-Windows-x64-Setup.exe','SpektraLab-Android-Phone.apk','SpektraLab-Android-Tablet.apk','updates.json','updates.json.sig')
           $root = (Resolve-Path validation-assets).Path
           $hashes = Get-Content (Join-Path $root 'SHA256SUMS.json') -Raw | ConvertFrom-Json -AsHashtable
-          if (($hashes.Keys | Sort-Object) -join "`n" -cne ($names | Sort-Object) -join "`n") { throw 'SHA256SUMS must contain exactly the five allowed assets' }
+          if ((($hashes.Keys | Sort-Object) -join "`n") -cne (($names | Sort-Object) -join "`n")) { throw 'SHA256SUMS must contain exactly the five allowed assets' }
           $extra = @(Get-ChildItem $root -Force | Where-Object { $_.Name -ne '.git' -and $_.Name -notin ($names + @('SHA256SUMS.json','README.md')) })
           if ($extra.Count) { throw 'Unexpected asset checkout content' }
           foreach ($name in $names) {
@@ -173,6 +173,7 @@ jobs:
           const {chromium, expect} = require('@playwright/test');
           const fs = require('node:fs');
           const path = require('node:path');
+          const {execFileSync} = require('node:child_process');
           const out = process.env.GUI_EVIDENCE;
           const events = [];
           const receipt = {build:13304, source_commit:process.env.SOURCE_REF, tag:process.env.DRAFT_TAG,
@@ -210,6 +211,12 @@ jobs:
                 mock:window.__spk?.sessionStore.getState().hello?.mock===true}));
               if (!principal.tauri || principal.mock) throw Error('Expected native Tauri bridge and no mock host: '+JSON.stringify(principal));
               record('embedded-origin-title-and-main-ui',principal);
+              const appPid=Number(process.env.GUI_APP_PID);
+              if (!Number.isSafeInteger(appPid)||appPid<=0) throw Error('Invalid recorded application PID');
+              const nativeTitle=execFileSync('pwsh',['-NoProfile','-NonInteractive','-Command',
+                `$app=Get-Process -Id ${appPid} -ErrorAction Stop; [Console]::Write($app.MainWindowTitle)`],{encoding:'utf8',timeout:15000}).trim();
+              if (!/SpektraLab/.test(nativeTitle)) throw Error('Unexpected native window title: '+nativeTitle);
+              record('installed-native-window-title',nativeTitle);
               await page.waitForFunction(()=>window.__spk?.sessionStore.getState().hostState.phase!=='starting',{},{timeout:120000});
               receipt.host = await page.evaluate(()=>window.__spk.sessionStore.getState().hostState);
               if (receipt.host.phase !== 'ready') throw Error('Native host blocks normal GUI interaction: '+JSON.stringify(receipt.host));
