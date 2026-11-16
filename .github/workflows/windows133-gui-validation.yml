@@ -85,9 +85,11 @@ jobs:
             if (!(Test-Path $path -PathType Leaf) -or $hashes[$name] -cnotmatch '^[0-9a-fA-F]{64}$') { throw "Invalid asset entry: $name" }
             if ((Get-FileHash $path -Algorithm SHA256).Hash -ine $hashes[$name]) { throw "Asset SHA256 mismatch: $name" }
           }
-          $releaseText = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:DRAFT_TAG"
+          $releaseText = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100"
           if ($LASTEXITCODE -ne 0) { throw 'The target release must already exist' }
-          $release = $releaseText | ConvertFrom-Json
+          $matches = @($releaseText | ConvertFrom-Json | Where-Object { $_.tag_name -ceq $env:DRAFT_TAG })
+          if ($matches.Count -ne 1) { throw 'Expected one existing release with the requested tag' }
+          $release = $matches[0]
           if ($release.draft -ne $true -or $release.tag_name -cne $env:DRAFT_TAG) { throw 'Refusing to mutate a published or unexpected release' }
           $paths = @($names | ForEach-Object { Join-Path $root $_ })
           gh release upload $env:DRAFT_TAG @paths --clobber --repo $env:GITHUB_REPOSITORY
@@ -102,9 +104,11 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $actual = (git -C source rev-parse HEAD).Trim()
           if ($LASTEXITCODE -ne 0 -or $actual -ine $env:SOURCE_REF) { throw 'Source checkout SHA mismatch' }
-          $releaseText = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:DRAFT_TAG"
+          $releaseText = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100"
           if ($LASTEXITCODE -ne 0) { throw 'Cannot read candidate release' }
-          $release = $releaseText | ConvertFrom-Json
+          $matches = @($releaseText | ConvertFrom-Json | Where-Object { $_.tag_name -ceq $env:DRAFT_TAG })
+          if ($matches.Count -ne 1) { throw 'Expected one existing release with the requested tag' }
+          $release = $matches[0]
           if ($release.draft -ne $true -or $release.tag_name -cne $env:DRAFT_TAG) { throw 'Expected the exact unpublished draft' }
           $assets = @($release.assets | Where-Object { $_.name -ceq $env:SETUP_ASSET })
           if ($assets.Count -ne 1) { throw 'Draft must contain exactly one stable Windows setup asset' }
