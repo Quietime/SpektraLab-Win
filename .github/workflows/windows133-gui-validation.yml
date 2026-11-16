@@ -78,7 +78,7 @@ jobs:
           $root = (Resolve-Path validation-assets).Path
           $hashes = Get-Content (Join-Path $root 'SHA256SUMS.json') -Raw | ConvertFrom-Json -AsHashtable
           if ((($hashes.Keys | Sort-Object) -join "`n") -cne (($names | Sort-Object) -join "`n")) { throw 'SHA256SUMS must contain exactly the five allowed assets' }
-          $extra = @(Get-ChildItem $root -Force | Where-Object { $_.Name -ne '.git' -and $_.Name -notin ($names + @('SHA256SUMS.json','README.md')) })
+          $extra = @(Get-ChildItem $root -Force | Where-Object { $_.Name -ne '.git' -and $_.Name -notin ($names + @('SHA256SUMS.json','README.md','.gitattributes')) })
           if ($extra.Count) { throw 'Unexpected asset checkout content' }
           foreach ($name in $names) {
             $path = Join-Path $root $name
