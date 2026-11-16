@@ -1,0 +1,303 @@
+# Manual validation of an existing draft candidate; never publishes a release.
+name: Windows 13304 WebView2 GUI validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Exact source commit for the locked Playwright dependencies
+        required: true
+        default: a4d234c494864908f2b9166b5dfe4fa576be237d
+      draft_tag:
+        description: Existing unpublished candidate release tag
+        required: true
+        default: v1.3.3-lighttable.3
+      asset_ref:
+        description: Optional exact validation-assets commit to upload into the existing draft
+        required: false
+        default: ''
+
+# Write is used only for the optional, hash-verified upload to an EXISTING draft.
+# Neither the workflow nor its scripts create/publish releases or push commits.
+permissions:
+  contents: write
+
+concurrency:
+  group: windows133-gui-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  webview2-gui:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      SOURCE_REF: ${{ inputs.source_ref }}
+      DRAFT_TAG: ${{ inputs.draft_tag }}
+      ASSET_REF: ${{ inputs.asset_ref }}
+      SETUP_ASSET: SpektraLab-Windows-x64-Setup.exe
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+
+    steps:
+      - name: Validate immutable inputs and create isolated evidence directory
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:SOURCE_REF -cnotmatch '^[0-9a-fA-F]{40}$') { throw 'source_ref must be a full commit SHA' }
+          if ($env:ASSET_REF -and $env:ASSET_REF -cnotmatch '^[0-9a-fA-F]{40}$') { throw 'asset_ref must be empty or a full commit SHA' }
+          if ($env:DRAFT_TAG -cnotmatch '^v[0-9A-Za-z][0-9A-Za-z._-]*$') { throw 'Invalid draft tag' }
+          $root = Join-Path $env:RUNNER_TEMP ('SpektraLab GUI ' + [guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $root, (Join-Path $root 'evidence'), (Join-Path $root 'download') -Force | Out-Null
+          "GUI_ROOT=$root" >> $env:GITHUB_ENV
+          "GUI_EVIDENCE=$(Join-Path $root 'evidence')" >> $env:GITHUB_ENV
+          "GUI_INSTALL=$(Join-Path $root 'isolated install with spaces')" >> $env:GITHUB_ENV
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+          path: source
+          persist-credentials: false
+
+      - uses: actions/checkout@v4
+        if: inputs.asset_ref != ''
+        with:
+          ref: ${{ inputs.asset_ref }}
+          path: validation-assets
+          persist-credentials: false
+          lfs: false
+
+      - name: Optionally upload five verified assets into the existing draft
+        if: inputs.asset_ref != ''
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $actual = (git -C validation-assets rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $actual -ine $env:ASSET_REF) { throw 'Asset checkout SHA mismatch' }
+          $names = @('SpektraLab-Windows-x64-Setup.exe','SpektraLab-Android-Phone.apk','SpektraLab-Android-Tablet.apk','updates.json','updates.json.sig')
+          $root = (Resolve-Path validation-assets).Path
+          $hashes = Get-Content (Join-Path $root 'SHA256SUMS.json') -Raw | ConvertFrom-Json -AsHashtable
+          if (($hashes.Keys | Sort-Object) -join "`n" -cne ($names | Sort-Object) -join "`n") { throw 'SHA256SUMS must contain exactly the five allowed assets' }
+          $extra = @(Get-ChildItem $root -Force | Where-Object { $_.Name -ne '.git' -and $_.Name -notin ($names + @('SHA256SUMS.json','README.md')) })
+          if ($extra.Count) { throw 'Unexpected asset checkout content' }
+          foreach ($name in $names) {
+            $path = Join-Path $root $name
+            if (!(Test-Path $path -PathType Leaf) -or $hashes[$name] -cnotmatch '^[0-9a-fA-F]{64}$') { throw "Invalid asset entry: $name" }
+            if ((Get-FileHash $path -Algorithm SHA256).Hash -ine $hashes[$name]) { throw "Asset SHA256 mismatch: $name" }
+          }
+          $releaseText = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:DRAFT_TAG"
+          if ($LASTEXITCODE -ne 0) { throw 'The target release must already exist' }
+          $release = $releaseText | ConvertFrom-Json
+          if ($release.draft -ne $true -or $release.tag_name -cne $env:DRAFT_TAG) { throw 'Refusing to mutate a published or unexpected release' }
+          $paths = @($names | ForEach-Object { Join-Path $root $_ })
+          gh release upload $env:DRAFT_TAG @paths --clobber --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw 'Draft asset upload failed' }
+          @{asset_commit=$actual;tag=$env:DRAFT_TAG;published=$false;verified_sha256=$hashes} | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $env:GUI_EVIDENCE 'draft-upload.json')
+
+      - name: Download the exact setup from the draft and record provenance
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $actual = (git -C source rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $actual -ine $env:SOURCE_REF) { throw 'Source checkout SHA mismatch' }
+          $releaseText = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:DRAFT_TAG"
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot read candidate release' }
+          $release = $releaseText | ConvertFrom-Json
+          if ($release.draft -ne $true -or $release.tag_name -cne $env:DRAFT_TAG) { throw 'Expected the exact unpublished draft' }
+          $assets = @($release.assets | Where-Object { $_.name -ceq $env:SETUP_ASSET })
+          if ($assets.Count -ne 1) { throw 'Draft must contain exactly one stable Windows setup asset' }
+          gh release download $env:DRAFT_TAG --pattern $env:SETUP_ASSET --dir (Join-Path $env:GUI_ROOT 'download') --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw 'Setup download failed' }
+          $setup = Join-Path $env:GUI_ROOT "download/$env:SETUP_ASSET"
+          $digest = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ((Get-Item $setup).Length -ne $assets[0].size) { throw 'Downloaded setup size differs from release metadata' }
+          if ($assets[0].digest -and $assets[0].digest -cne "sha256:$digest") { throw 'GitHub asset digest mismatch' }
+          if ($env:ASSET_REF) {
+            $expected = Get-Content validation-assets/SHA256SUMS.json -Raw | ConvertFrom-Json -AsHashtable
+            if ($digest -ine $expected[$env:SETUP_ASSET]) { throw 'Downloaded setup differs from verified asset commit' }
+          }
+          @{source_commit=$actual;asset_commit=$env:ASSET_REF;release_id=$release.id;tag=$release.tag_name;is_draft=$release.draft;asset=$env:SETUP_ASSET;bytes=(Get-Item $setup).Length;sha256=$digest} | ConvertTo-Json | Set-Content (Join-Path $env:GUI_EVIDENCE 'candidate.json')
+          "GUI_SETUP=$setup" >> $env:GITHUB_ENV
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: source/desktop/package-lock.json
+
+      - name: Install locked CDP client dependencies (no browser download)
+        working-directory: source/desktop
+        shell: pwsh
+        run: npm ci --no-audit --no-fund
+
+      - name: Install normally to a temporary path containing spaces
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # NSIS /D= is deliberately last and consumes the remaining path,
+          # including spaces. Do not bypass the WebView2 prerequisite.
+          $process = Start-Process -FilePath $env:GUI_SETUP -ArgumentList ('/S /D=' + $env:GUI_INSTALL) -Wait -PassThru -RedirectStandardOutput (Join-Path $env:GUI_EVIDENCE 'setup.stdout.log') -RedirectStandardError (Join-Path $env:GUI_EVIDENCE 'setup.stderr.log')
+          if ($process.ExitCode -ne 0) { throw "Installer exited $($process.ExitCode)" }
+          $exe = Join-Path $env:GUI_INSTALL 'SpektraLab-Windows.exe'
+          if (!(Test-Path $exe -PathType Leaf)) { throw 'Main program missing at requested temporary location' }
+          $info = Get-Content (Join-Path $env:GUI_INSTALL 'BUILD-INFO.json') -Raw | ConvertFrom-Json
+          if ($info.build -ne 13304 -or $info.version -cne '1.3.3-lighttable.3') { throw 'Installed candidate version mismatch' }
+          $manifest = Get-Content (Join-Path $env:GUI_INSTALL 'SHA256SUMS.json') -Raw | ConvertFrom-Json -AsHashtable
+          if (!$manifest.ContainsKey('SpektraLab-Windows.exe')) { throw 'Main program absent from installed hash manifest' }
+          $prefix = [IO.Path]::GetFullPath($env:GUI_INSTALL) + [IO.Path]::DirectorySeparatorChar
+          foreach ($name in $manifest.Keys) {
+            $path = [IO.Path]::GetFullPath((Join-Path $env:GUI_INSTALL $name))
+            if (!$path.StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe installed manifest path' }
+            if ((Get-FileHash $path -Algorithm SHA256).Hash -ine $manifest[$name]) { throw "Installed file differs: $name" }
+          }
+          if ((Get-FileHash $exe -Algorithm SHA256).Hash -ine $info.main_exe_sha256) { throw 'Installed executable differs from BUILD-INFO' }
+          Copy-Item (Join-Path $env:GUI_INSTALL 'BUILD-INFO.json'),(Join-Path $env:GUI_INSTALL 'SHA256SUMS.json') $env:GUI_EVIDENCE
+
+      - name: Launch the installed WebView2 application
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9222'
+          $env:WEBVIEW2_USER_DATA_FOLDER = Join-Path $env:GUI_ROOT 'isolated WebView2 profile'
+          $process = Start-Process -FilePath (Join-Path $env:GUI_INSTALL 'SpektraLab-Windows.exe') -WorkingDirectory $env:GUI_INSTALL -PassThru -RedirectStandardOutput (Join-Path $env:GUI_EVIDENCE 'app.stdout.log') -RedirectStandardError (Join-Path $env:GUI_EVIDENCE 'app.stderr.log')
+          "GUI_APP_PID=$($process.Id)" >> $env:GITHUB_ENV
+
+      - name: Verify the real embedded UI and LightTable over WebView2 CDP
+        working-directory: source/desktop
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @'
+          const {chromium, expect} = require('@playwright/test');
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const out = process.env.GUI_EVIDENCE;
+          const events = [];
+          const receipt = {build:13304, source_commit:process.env.SOURCE_REF, tag:process.env.DRAFT_TAG,
+            platform:'GitHub-hosted Windows / actual installed WebView2', passed:false,
+            scope:'Embedded startup, real DOM interaction and native LightTable persistence; no photo-render, physical GPU or Android claim', checks:[]};
+          let browser, page;
+          const record = (name, detail) => { receipt.checks.push({name, passed:true, detail}); console.log('PASS',name,detail ?? ''); };
+          const embedded = value => {
+            try { const u = new URL(value); return (u.protocol === 'http:' || u.protocol === 'https:') && u.hostname === 'tauri.localhost' && !u.port
+              || u.protocol === 'tauri:' && u.hostname === 'localhost' && !u.port; } catch { return false; }
+          };
+          (async () => {
+            try {
+              const until = Date.now() + 90000;
+              while (Date.now() < until && !browser) {
+                try { browser = await chromium.connectOverCDP('http://127.0.0.1:9222',{timeout:3000}); }
+                catch { await new Promise(resolve => setTimeout(resolve,1000)); }
+              }
+              if (!browser) throw Error('Installed WebView2 never exposed its CDP endpoint');
+              const pagesUntil = Date.now() + 60000;
+              while (Date.now() < pagesUntil && !page) {
+                page = browser.contexts().flatMap(context => context.pages()).find(candidate => embedded(candidate.url()));
+                if (!page) await new Promise(resolve => setTimeout(resolve,500));
+              }
+              if (!page) throw Error('No embedded application page; targets: '+JSON.stringify(browser.contexts().flatMap(c=>c.pages().map(p=>p.url()))));
+              page.on('console',message=>events.push({type:'console',level:message.type(),text:message.text()}));
+              page.on('pageerror',error=>events.push({type:'pageerror',text:String(error)}));
+              page.on('requestfailed',request=>events.push({type:'requestfailed',url:request.url(),error:request.failure()?.errorText}));
+              await expect(page.getByTestId('editor')).toBeVisible({timeout:60000});
+              await expect(page.locator('#root')).not.toBeEmpty();
+              await expect(page).toHaveTitle(/SpektraLab/);
+              if (!embedded(page.url())) throw Error('Application left embedded origin: '+page.url());
+              if (/chrome-error:|edge-error:|127\.0\.0\.1|localhost:5173/.test(page.url())) throw Error('Development/error page: '+page.url());
+              const principal = await page.evaluate(()=>({url:location.href,title:document.title,tauri:!!window.__TAURI_INTERNALS__?.invoke,
+                mock:window.__spk?.sessionStore.getState().hello?.mock===true}));
+              if (!principal.tauri || principal.mock) throw Error('Expected native Tauri bridge and no mock host: '+JSON.stringify(principal));
+              record('embedded-origin-title-and-main-ui',principal);
+              await page.waitForFunction(()=>window.__spk?.sessionStore.getState().hostState.phase!=='starting',{},{timeout:120000});
+              receipt.host = await page.evaluate(()=>window.__spk.sessionStore.getState().hostState);
+              if (receipt.host.phase !== 'ready') throw Error('Native host blocks normal GUI interaction: '+JSON.stringify(receipt.host));
+              await expect(page.getByTestId('host-failure')).toHaveCount(0);
+              record('native-host-ready-without-failure-overlay',receipt.host.phase);
+              await page.screenshot({path:path.join(out,'01-editor.png')});
+              await page.getByTestId('lighttable-open').click();
+              await expect(page.getByTestId('lighttable')).toBeVisible();
+              await expect(page.getByTestId('lt-new-tray')).toBeEnabled();
+              const lamp = page.getByTestId('lt-lamp');
+              const before = await lamp.getAttribute('aria-pressed');
+              if (!['true','false'].includes(before)) throw Error('Lamp state missing');
+              await lamp.click();
+              await expect(lamp).toHaveAttribute('aria-pressed',before==='true'?'false':'true');
+              await page.getByTestId('lt-save').click();
+              await page.getByTestId('lt-close').click();
+              await expect(page.getByTestId('lighttable')).toHaveCount(0);
+              await page.getByTestId('lighttable-open').click();
+              await expect(lamp).toHaveAttribute('aria-pressed',before==='true'?'false':'true');
+              await expect(page.getByTestId('lt-error')).toHaveCount(0);
+              // Read through the real native bridge, not through a mock store.
+              await expect.poll(async()=>page.evaluate(async()=>{
+                const value=await window.__TAURI_INTERNALS__.invoke('store_read',{area:'LightTable',name:'layout.json'});
+                return value?.lamp;
+              }),{timeout:30000}).toBe(before!=='true');
+              record('lighttable-open-lamp-save-close-reopen-and-native-store',before==='true'?'false':'true');
+              await page.screenshot({path:path.join(out,'02-lighttable.png')});
+              let resized = false;
+              try { await page.setViewportSize({width:390,height:844}); resized=true; }
+              catch(error) { receipt.compact_viewport={status:'unsupported',reason:String(error)}; }
+              if (resized) {
+                await expect(page.getByTestId('lighttable-stage')).toBeVisible();
+                await expect(page.getByTestId('lt-close')).toBeVisible();
+                await lamp.scrollIntoViewIfNeeded();
+                await lamp.click();
+                await expect(lamp).toHaveAttribute('aria-pressed',before);
+                await page.screenshot({path:path.join(out,'03-compact-windows-viewport.png')});
+                receipt.compact_viewport={status:'passed',width:390,height:844,scope:'Windows CDP viewport only; no Android emulation'};
+                record('compact-viewport-real-lamp-interaction',receipt.compact_viewport);
+              }
+              await page.getByTestId('lt-close').click();
+              await expect(page.getByTestId('editor')).toBeVisible();
+              if (!embedded(page.url())) throw Error('Unexpected final page origin: '+page.url());
+              const pageErrors=events.filter(event=>event.type==='pageerror');
+              if (pageErrors.length) throw Error('Unhandled page errors: '+JSON.stringify(pageErrors));
+              receipt.passed=true;
+            } catch(error) {
+              receipt.error=String(error?.stack||error);
+              console.error(receipt.error);
+              if (page) { try { await page.screenshot({path:path.join(out,'failure.png')}); } catch {} }
+              process.exitCode=1;
+            } finally {
+              if (page) {
+                receipt.final_url=page.url();
+                try { fs.writeFileSync(path.join(out,'final-page.html'),await page.content()); } catch {}
+              }
+              fs.writeFileSync(path.join(out,'webview-events.json'),JSON.stringify(events,null,2));
+              fs.writeFileSync(path.join(out,'GUI-VALIDATION.json'),JSON.stringify(receipt,null,2));
+              if (browser) { try { await browser.close(); } catch {} }
+            }
+          })();
+          '@ | Set-Content -Encoding utf8 ci-windows133-gui.cjs
+          node ci-windows133-gui.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Actual WebView2 GUI smoke failed; inspect evidence artifact' }
+
+      - name: Collect installed app logs and stop only this test installation
+        if: always()
+        shell: pwsh
+        run: |
+          if (!$env:GUI_EVIDENCE) { exit 0 }
+          Get-Process -Name SpektraLab-Windows,msedgewebview2 -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,MainWindowTitle,Path | ConvertTo-Json | Set-Content (Join-Path $env:GUI_EVIDENCE 'processes.json')
+          foreach ($base in @($env:APPDATA,$env:LOCALAPPDATA)) {
+            $logs = Join-Path $base 'app.spektralab.windows133/logs'
+            if (Test-Path $logs) {
+              $name = if ($base -eq $env:APPDATA) { 'roaming-app-logs' } else { 'local-app-logs' }
+              Copy-Item $logs (Join-Path $env:GUI_EVIDENCE $name) -Recurse -Force -ErrorAction Continue
+            }
+          }
+          if ($env:GUI_INSTALL) {
+            $prefix = [IO.Path]::GetFullPath($env:GUI_INSTALL) + [IO.Path]::DirectorySeparatorChar
+            Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase) } | Stop-Process -Force -ErrorAction Continue
+          }
+          @('Windows-latest real WebView2 GUI validation; not Wine.','The workflow did not publish a release or modify source, keys, or physical user installations.','A failure or unsupported viewport is evidence, not a successful GUI/physical-GPU acceptance.') | Set-Content (Join-Path $env:GUI_EVIDENCE 'SCOPE.txt')
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows133-webview2-gui-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.GUI_EVIDENCE }}
+          if-no-files-found: warn
+          retention-days: 14
