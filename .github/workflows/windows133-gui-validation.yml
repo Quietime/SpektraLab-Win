@@ -16,6 +16,14 @@ on:
         description: Optional exact validation-assets commit to upload into the existing draft
         required: false
         default: ''
+      rehearsal_manifest_b64:
+        description: Optional signed future metadata for same-payload helper reinstall validation
+        required: false
+        default: ''
+      rehearsal_signature_b64:
+        description: Optional signature bytes as base64, paired with rehearsal_manifest_b64
+        required: false
+        default: ''
 
 # Write is used only for the optional, hash-verified upload to an EXISTING draft.
 # Neither the workflow nor its scripts create/publish releases or push commits.
@@ -34,6 +42,8 @@ jobs:
       SOURCE_REF: ${{ inputs.source_ref }}
       DRAFT_TAG: ${{ inputs.draft_tag }}
       ASSET_REF: ${{ inputs.asset_ref }}
+      WINDOWS_REHEARSAL_MANIFEST_B64: ${{ inputs.rehearsal_manifest_b64 }}
+      WINDOWS_REHEARSAL_SIGNATURE_B64: ${{ inputs.rehearsal_signature_b64 }}
       SETUP_ASSET: SpektraLab-Windows-x64-Setup.exe
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
 
@@ -44,6 +54,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           if ($env:SOURCE_REF -cnotmatch '^[0-9a-fA-F]{40}$') { throw 'source_ref must be a full commit SHA' }
           if ($env:ASSET_REF -and $env:ASSET_REF -cnotmatch '^[0-9a-fA-F]{40}$') { throw 'asset_ref must be empty or a full commit SHA' }
+          if ([bool]$env:WINDOWS_REHEARSAL_MANIFEST_B64 -ne [bool]$env:WINDOWS_REHEARSAL_SIGNATURE_B64) { throw 'Both signed reinstall inputs are required together' }
           if ($env:DRAFT_TAG -cnotmatch '^v[0-9A-Za-z][0-9A-Za-z._-]*$') { throw 'Invalid draft tag' }
           $root = Join-Path $env:RUNNER_TEMP ('SpektraLab GUI ' + [guid]::NewGuid().ToString('N'))
           New-Item -ItemType Directory -Path $root, (Join-Path $root 'evidence'), (Join-Path $root 'download') -Force | Out-Null
@@ -391,6 +402,16 @@ jobs:
           '@ | Set-Content -Encoding utf8 ci-windows133-gui.cjs
           node ci-windows133-gui.cjs
           if ($LASTEXITCODE -ne 0) { throw 'Actual WebView2 GUI smoke failed; inspect evidence artifact' }
+
+      - name: Rehearse the real signed helper handoff with identical payload
+        if: inputs.rehearsal_manifest_b64 != ''
+        working-directory: source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (!(Test-Path 'distribution/windows/check-helper-reinstall.cjs')) { throw 'source_ref must include the helper rehearsal script' }
+          node distribution/windows/check-helper-reinstall.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Signed helper reinstall failed; prepared files are preserved for diagnosis' }
 
       - name: Collect installed app logs and stop only this test installation
         if: always()
