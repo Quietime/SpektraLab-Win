@@ -73,7 +73,7 @@ jobs:
               assert len(bytes.fromhex(Path('updates.json.sig').read_text().strip()))==384
               report=json.loads(Path('VALIDATION-13304.json').read_bytes())
               assert report['build']==13304 and report['release_gate_passed'] is True
-          
+
           PY
       - name: Upload to existing unpublished draft only
         run: |
