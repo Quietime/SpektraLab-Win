@@ -159,20 +159,25 @@ jobs:
           if ((Get-FileHash $exe -Algorithm SHA256).Hash -ine $info.main_exe_sha256) { throw 'Installed executable differs from BUILD-INFO' }
           Copy-Item (Join-Path $env:GUI_INSTALL 'BUILD-INFO.json'),(Join-Path $env:GUI_INSTALL 'SHA256SUMS.json') $env:GUI_EVIDENCE
 
-      - name: Launch the installed WebView2 application
+      - name: Launch and verify the installed WebView2 application
+        working-directory: source/desktop
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9222'
           $env:WEBVIEW2_USER_DATA_FOLDER = Join-Path $env:GUI_ROOT 'isolated WebView2 profile'
           $process = Start-Process -FilePath (Join-Path $env:GUI_INSTALL 'SpektraLab-Windows.exe') -WorkingDirectory $env:GUI_INSTALL -PassThru -RedirectStandardOutput (Join-Path $env:GUI_EVIDENCE 'app.stdout.log') -RedirectStandardError (Join-Path $env:GUI_EVIDENCE 'app.stderr.log')
+          $env:GUI_APP_PID = [string]$process.Id
           "GUI_APP_PID=$($process.Id)" >> $env:GITHUB_ENV
+          Start-Sleep -Seconds 3
+          $process.Refresh()
+          Get-CimInstance Win32_Process | Where-Object { $_.Name -like '*Spektra*' -or $_.Name -eq 'msedgewebview2.exe' } | Select-Object ProcessId,ParentProcessId,Name,ExecutablePath,CommandLine | ConvertTo-Json -Depth 3 | Set-Content (Join-Path $env:GUI_EVIDENCE 'launch-processes.json')
+          if ($process.HasExited) {
+            Get-WinEvent -FilterHashtable @{LogName='Application';StartTime=(Get-Date).AddMinutes(-3);Level=2} -ErrorAction Continue | Select-Object TimeCreated,ProviderName,Id,Message | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $env:GUI_EVIDENCE 'application-errors.json')
+            throw "Installed GUI exited during startup with code $($process.ExitCode)"
+          }
 
-      - name: Verify the real embedded UI and LightTable over WebView2 CDP
-        working-directory: source/desktop
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
+          # Keep the launch and CDP client in the same PowerShell lifetime.
           @'
           const {chromium, expect} = require('@playwright/test');
           const fs = require('node:fs');
