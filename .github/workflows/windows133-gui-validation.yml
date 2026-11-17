@@ -164,7 +164,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           # Hosted runners have no physical Vulkan device. This portable ICD
-          # is used only for validation, without driver-registry deployment.
+          # is used only for validation, with one owned registry entry removed afterward.
           $archive = Join-Path $env:GUI_ROOT 'mesa3d-26.2.6-release-msvc.7z'
           Invoke-WebRequest 'https://github.com/pal1000/mesa-dist-win/releases/download/26.2.6/mesa3d-26.2.6-release-msvc.7z' -OutFile $archive
           $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -188,9 +188,22 @@ jobs:
             $loader = Start-Process $runtime -ArgumentList '/S' -Wait -PassThru
             if ($loader.ExitCode -ne 0 -or !(Test-Path "$env:WINDIR\System32\vulkan-1.dll" -PathType Leaf)) { throw 'CI Vulkan loader setup failed' }
           }
+          # Vulkan Loader also ignores driver environment overrides in an
+          # elevated host. Register only this temporary manifest in HKLM.
+          # https://github.com/KhronosGroup/Vulkan-Loader/blob/main/loader/loader_environment.c
+          $machine = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::LocalMachine,[Microsoft.Win32.RegistryView]::Registry64)
+          try {
+            $drivers = $machine.CreateSubKey('SOFTWARE\Khronos\Vulkan\Drivers',$true)
+            try {
+              if ($drivers.GetValueNames() -contains $config) { throw 'Temporary ICD registry slot already exists' }
+              @{manifest=$config;value=0} | ConvertTo-Json | Set-Content (Join-Path $env:GUI_ROOT 'owned-vulkan-icd.json')
+              $drivers.SetValue($config,0,[Microsoft.Win32.RegistryValueKind]::DWord)
+            } finally { $drivers.Dispose() }
+          } finally { $machine.Dispose() }
+          $icds[0].DirectoryName >> $env:GITHUB_PATH
           "VK_DRIVER_FILES=$config" >> $env:GITHUB_ENV
           "VK_ICD_FILENAMES=$config" >> $env:GITHUB_ENV
-          @{scope='Portable software Vulkan on hosted Windows; no physical GPU claim';mesa_tag='26.2.6';mesa_sha256=$hash;icd=$config;library_sha256=(Get-FileHash $library -Algorithm SHA256).Hash.ToLowerInvariant();registry_driver_deployment=$false} | ConvertTo-Json | Set-Content (Join-Path $env:GUI_EVIDENCE 'software-vulkan.json')
+          @{scope='Portable software Vulkan on hosted Windows; no physical GPU claim';mesa_tag='26.2.6';mesa_sha256=$hash;icd=$config;library_sha256=(Get-FileHash $library -Algorithm SHA256).Hash.ToLowerInvariant();registry_driver_deployment='temporary exact manifest value, removed after test'} | ConvertTo-Json | Set-Content (Join-Path $env:GUI_EVIDENCE 'software-vulkan.json')
 
       - name: Configure app-scoped CDP for the elevated CI host
         shell: pwsh
@@ -422,6 +435,31 @@ jobs:
           } finally { $machine.Dispose() }
           $record.cleanup = 'removed exact app value; existing keys and all other values retained'
           $record | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $env:GUI_EVIDENCE 'cdp-policy.json')
+
+      - name: Remove only the CI-created software Vulkan manifest entry
+        if: always()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (!$env:GUI_ROOT) { exit 0 }
+          $marker = Join-Path $env:GUI_ROOT 'owned-vulkan-icd.json'
+          if (!(Test-Path $marker -PathType Leaf)) { exit 0 }
+          $record = Get-Content $marker -Raw | ConvertFrom-Json
+          $expected = Join-Path $env:GUI_ROOT 'ci-lavapipe.json'
+          if ($record.manifest -cne $expected) { throw 'Unexpected owned ICD path' }
+          $machine = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::LocalMachine,[Microsoft.Win32.RegistryView]::Registry64)
+          try {
+            $drivers = $machine.OpenSubKey('SOFTWARE\Khronos\Vulkan\Drivers',$true)
+            if ($drivers) {
+              try {
+                if ($drivers.GetValueNames() -contains $expected) {
+                  if ($drivers.GetValueKind($expected) -ne [Microsoft.Win32.RegistryValueKind]::DWord -or $drivers.GetValue($expected) -ne 0) { throw 'ICD entry changed; refusing to remove it' }
+                  $drivers.DeleteValue($expected,$false)
+                }
+              } finally { $drivers.Dispose() }
+            }
+          } finally { $machine.Dispose() }
+          @{removed_manifest=$expected;other_registry_entries_retained=$true} | ConvertTo-Json | Set-Content (Join-Path $env:GUI_EVIDENCE 'software-vulkan-cleanup.json')
 
       - uses: actions/upload-artifact@v4
         if: always()
