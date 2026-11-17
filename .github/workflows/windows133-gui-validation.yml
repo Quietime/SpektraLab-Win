@@ -159,6 +159,94 @@ jobs:
           if ((Get-FileHash $exe -Algorithm SHA256).Hash -ine $info.main_exe_sha256) { throw 'Installed executable differs from BUILD-INFO' }
           Copy-Item (Join-Path $env:GUI_INSTALL 'BUILD-INFO.json'),(Join-Path $env:GUI_INSTALL 'SHA256SUMS.json') $env:GUI_EVIDENCE
 
+      - name: Configure pinned portable software Vulkan for this CI job
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Hosted runners have no physical Vulkan device. This portable ICD
+          # is used only for validation, without driver-registry deployment.
+          $archive = Join-Path $env:GUI_ROOT 'mesa3d-26.2.6-release-msvc.7z'
+          Invoke-WebRequest 'https://github.com/pal1000/mesa-dist-win/releases/download/26.2.6/mesa3d-26.2.6-release-msvc.7z' -OutFile $archive
+          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ((Get-Item $archive).Length -ne 55964101 -or $hash -cne 'b2e00615feaba45942343c265cc8c5f576142ca682c1ac6661922d4b72492877') { throw 'Pinned Mesa asset size or hash mismatch' }
+          $mesa = Join-Path $env:GUI_ROOT 'portable mesa'
+          & "$env:ProgramFiles\7-Zip\7z.exe" x $archive "-o$mesa" -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Mesa extraction failed' }
+          $icds = @(Get-ChildItem $mesa -Recurse -File -Filter 'lvp_icd.x86_64.json')
+          if ($icds.Count -ne 1) { throw 'Expected exactly one x64 lavapipe ICD' }
+          $library = Join-Path $icds[0].DirectoryName 'vulkan_lvp.dll'
+          if (!(Test-Path $library -PathType Leaf)) { throw 'Portable x64 lavapipe DLL missing beside ICD' }
+          $icd = Get-Content $icds[0].FullName -Raw | ConvertFrom-Json
+          $icd.ICD.library_path = $library
+          $config = Join-Path $env:GUI_ROOT 'ci-lavapipe.json'
+          $icd | ConvertTo-Json -Depth 6 | Set-Content $config
+          if (!(Test-Path "$env:WINDIR\System32\vulkan-1.dll" -PathType Leaf)) {
+            # Official Khronos runtime, pinned to the winget-pkgs manifest.
+            $runtime = Join-Path $env:GUI_ROOT 'VulkanRT-X64-1.4.363.0-Installer.exe'
+            Invoke-WebRequest 'https://sdk.lunarg.com/sdk/download/1.4.363.0/windows/VulkanRT-X64-1.4.363.0-Installer.exe' -OutFile $runtime
+            if ((Get-FileHash $runtime -Algorithm SHA256).Hash -ine '3F03BDA2522D1D10D05461CE8A47364F9AF6F5DC8642B7C45E43943DBA164303') { throw 'Pinned official Vulkan loader hash mismatch' }
+            $loader = Start-Process $runtime -ArgumentList '/S' -Wait -PassThru
+            if ($loader.ExitCode -ne 0 -or !(Test-Path "$env:WINDIR\System32\vulkan-1.dll" -PathType Leaf)) { throw 'CI Vulkan loader setup failed' }
+          }
+          "VK_DRIVER_FILES=$config" >> $env:GITHUB_ENV
+          "VK_ICD_FILENAMES=$config" >> $env:GITHUB_ENV
+          @{scope='Portable software Vulkan on hosted Windows; no physical GPU claim';mesa_tag='26.2.6';mesa_sha256=$hash;icd=$config;library_sha256=(Get-FileHash $library -Algorithm SHA256).Hash.ToLowerInvariant();registry_driver_deployment=$false} | ConvertTo-Json | Set-Content (Join-Path $env:GUI_EVIDENCE 'software-vulkan.json')
+
+      - name: Configure app-scoped CDP for the elevated CI host
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Runtime >=150 ignores AdditionalBrowserArguments env/HKCU overrides
+          # in an elevated host. HKLM app-scoped overrides remain supported:
+          # https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/security#for-an-elevated-host-app-use-appropriate-override-flags
+          # This changes only the disposable CI runner, never the shipped EXE.
+          $subkey = 'SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
+          $valueName = 'SpektraLab-Windows.exe'
+          $arguments = '--remote-debugging-port=9222'
+          $observed = @()
+          foreach ($hive in @([Microsoft.Win32.RegistryHive]::LocalMachine,[Microsoft.Win32.RegistryHive]::CurrentUser)) {
+            foreach ($view in @([Microsoft.Win32.RegistryView]::Registry64,[Microsoft.Win32.RegistryView]::Registry32)) {
+              $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey($hive,$view)
+              try {
+                foreach ($policyPath in @('SOFTWARE\Policies\Microsoft\Edge','SOFTWARE\Policies\Microsoft\Edge\WebView2')) {
+                  $policy = $base.OpenSubKey($policyPath)
+                  if ($policy) {
+                    try {
+                      if ($policy.GetValueNames() -contains 'RemoteDebuggingAllowed') {
+                        $value = $policy.GetValue('RemoteDebuggingAllowed')
+                        $observed += @{hive=[string]$hive;view=[string]$view;path=$policyPath;name='RemoteDebuggingAllowed';value=$value}
+                        if ([string]$value -eq '0') { throw 'Existing policy forbids remote debugging; refusing to weaken it' }
+                      }
+                    } finally { $policy.Dispose() }
+                  }
+                }
+                $existing = $base.OpenSubKey($subkey)
+                if ($existing) {
+                  try {
+                    # Do not replace an app/AUMID value or shadow a wildcard.
+                    foreach ($name in @($valueName,'app.spektralab.windows133','*')) {
+                      if ($existing.GetValueNames() -contains $name) { throw "Pre-existing WebView2 browser-argument policy for $name; refusing to overwrite or shadow it" }
+                    }
+                  } finally { $existing.Dispose() }
+                }
+              } finally { $base.Dispose() }
+            }
+          }
+          $record = @{hive='LocalMachine';view='Registry64';path=$subkey;name=$valueName;value=$arguments;observed_policy=$observed;source='https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/security';cleanup='pending'}
+          # Write ownership intent first so always-cleanup covers failures after
+          # SetValue as well. Cleanup removes only the exact value we introduce.
+          $record | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $env:GUI_ROOT 'owned-cdp-policy.json')
+          $machine = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::LocalMachine,[Microsoft.Win32.RegistryView]::Registry64)
+          try {
+            $key = $machine.CreateSubKey($subkey,$true)
+            try {
+              if ($key.GetValueNames() -contains $valueName) { throw 'App policy appeared concurrently; refusing to replace it' }
+              $key.SetValue($valueName,$arguments,[Microsoft.Win32.RegistryValueKind]::String)
+              if ($key.GetValue($valueName) -cne $arguments) { throw 'App-scoped CDP policy readback mismatch' }
+            } finally { $key.Dispose() }
+          } finally { $machine.Dispose() }
+          $record | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $env:GUI_EVIDENCE 'cdp-policy.json')
+
       - name: Launch and verify the installed WebView2 application
         working-directory: source/desktop
         shell: pwsh
@@ -309,6 +397,31 @@ jobs:
             Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase) } | Stop-Process -Force -ErrorAction Continue
           }
           @('Windows-latest real WebView2 GUI validation; not Wine.','The workflow did not publish a release or modify source, keys, or physical user installations.','A failure or unsupported viewport is evidence, not a successful GUI/physical-GPU acceptance.') | Set-Content (Join-Path $env:GUI_EVIDENCE 'SCOPE.txt')
+
+      - name: Remove only the CI-created app-scoped CDP value
+        if: always()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (!$env:GUI_ROOT) { exit 0 }
+          $marker = Join-Path $env:GUI_ROOT 'owned-cdp-policy.json'
+          if (!(Test-Path $marker -PathType Leaf)) { exit 0 }
+          $record = Get-Content $marker -Raw | ConvertFrom-Json
+          $machine = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::LocalMachine,[Microsoft.Win32.RegistryView]::Registry64)
+          try {
+            $key = $machine.OpenSubKey('SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments',$true)
+            if ($key) {
+              try {
+                if ($key.GetValueNames() -contains 'SpektraLab-Windows.exe') {
+                  if ($key.GetValue('SpektraLab-Windows.exe') -cne '--remote-debugging-port=9222') { throw 'App policy changed; refusing to delete a value no longer owned by this test' }
+                  $key.DeleteValue('SpektraLab-Windows.exe',$false)
+                  if ($key.GetValueNames() -contains 'SpektraLab-Windows.exe') { throw 'App-scoped CDP policy cleanup failed' }
+                }
+              } finally { $key.Dispose() }
+            }
+          } finally { $machine.Dispose() }
+          $record.cleanup = 'removed exact app value; existing keys and all other values retained'
+          $record | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $env:GUI_EVIDENCE 'cdp-policy.json')
 
       - uses: actions/upload-artifact@v4
         if: always()
