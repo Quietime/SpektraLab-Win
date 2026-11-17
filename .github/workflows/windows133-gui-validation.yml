@@ -46,6 +46,8 @@ jobs:
       WINDOWS_REHEARSAL_SIGNATURE_B64: ${{ inputs.rehearsal_signature_b64 }}
       SETUP_ASSET: SpektraLab-Windows-x64-Setup.exe
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: utf-8
 
     steps:
       - name: Validate immutable inputs and create isolated evidence directory
