@@ -271,6 +271,20 @@ jobs:
           } finally { $machine.Dispose() }
           $record | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $env:GUI_EVIDENCE 'cdp-policy.json')
 
+      - name: Exercise actual Windows native rendering and large-file pressure
+        working-directory: source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $nativeHost = Join-Path $env:GUI_INSTALL 'spektralab-host.exe'
+          $nativeResources = Join-Path $env:GUI_INSTALL 'host/engine'
+          python engine/tests/host_smoke.py --host $nativeHost --resources $nativeResources 2>&1 | Tee-Object -FilePath (Join-Path $env:GUI_EVIDENCE 'native-host-smoke.log')
+          if ($LASTEXITCODE -ne 0) { throw 'Actual Windows native host rendering smoke failed' }
+          python distribution/stress/native_image_budget.py --host $nativeHost --resources $nativeResources --work-dir (Join-Path $env:GUI_ROOT 'budget pressure') --receipt (Join-Path $env:GUI_EVIDENCE 'native-budget.receipt.json') --timeout 90 --run-timeout 300 2>&1 | Tee-Object -FilePath (Join-Path $env:GUI_EVIDENCE 'native-budget.log')
+          if ($LASTEXITCODE -ne 0) { throw 'Actual Windows 192MiB image budget rejection/recovery failed' }
+          python distribution/stress/native_file_count.py --host $nativeHost --resources $nativeResources --work-dir (Join-Path $env:GUI_ROOT 'many files pressure') --receipt (Join-Path $env:GUI_EVIDENCE 'native-file-count.receipt.json') --timeout 90 --run-timeout 600 2>&1 | Tee-Object -FilePath (Join-Path $env:GUI_EVIDENCE 'native-file-count.log')
+          if ($LASTEXITCODE -ne 0) { throw 'Actual Windows 1000-probe/32-render file-count pressure failed' }
+
       - name: Launch and verify the installed WebView2 application
         working-directory: source/desktop
         shell: pwsh
