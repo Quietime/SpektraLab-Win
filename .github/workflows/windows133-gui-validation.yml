@@ -308,7 +308,7 @@ jobs:
           const {chromium, expect} = require('@playwright/test');
           const fs = require('node:fs');
           const path = require('node:path');
-          const {execFileSync} = require('node:child_process');
+          const {execFileSync,spawn} = require('node:child_process');
           const out = process.env.GUI_EVIDENCE;
           const events = [];
           const receipt = {build:13304, source_commit:process.env.SOURCE_REF, tag:process.env.DRAFT_TAG,
@@ -397,6 +397,18 @@ jobs:
               if (!embedded(page.url())) throw Error('Unexpected final page origin: '+page.url());
               const pageErrors=events.filter(event=>event.type==='pageerror');
               if (pageErrors.length) throw Error('Unhandled page errors: '+JSON.stringify(pageErrors));
+              if (process.env.WINDOWS_REHEARSAL_MANIFEST_B64) {
+                // Keep this GUI/CDP owner alive until the helper completes;
+                // closing it first would terminate the process under test.
+                const script=path.resolve('..','distribution','windows','check-helper-reinstall.cjs');
+                if (!fs.existsSync(script)) throw Error('source_ref must include the helper rehearsal script');
+                await new Promise((resolve,reject)=>{
+                  const child=spawn(process.execPath,[script],{stdio:'inherit',env:process.env});
+                  child.once('error',reject);
+                  child.once('exit',code=>code===0?resolve():reject(Error('Signed helper reinstall exited '+code)));
+                });
+                record('signed-helper-same-payload-reinstall-and-cleanup','See HELPER-REINSTALL.json; no version migration claim');
+              }
               receipt.passed=true;
             } catch(error) {
               receipt.error=String(error?.stack||error);
@@ -416,16 +428,6 @@ jobs:
           '@ | Set-Content -Encoding utf8 ci-windows133-gui.cjs
           node ci-windows133-gui.cjs
           if ($LASTEXITCODE -ne 0) { throw 'Actual WebView2 GUI smoke failed; inspect evidence artifact' }
-
-      - name: Rehearse the real signed helper handoff with identical payload
-        if: inputs.rehearsal_manifest_b64 != ''
-        working-directory: source
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          if (!(Test-Path 'distribution/windows/check-helper-reinstall.cjs')) { throw 'source_ref must include the helper rehearsal script' }
-          node distribution/windows/check-helper-reinstall.cjs
-          if ($LASTEXITCODE -ne 0) { throw 'Signed helper reinstall failed; prepared files are preserved for diagnosis' }
 
       - name: Collect installed app logs and stop only this test installation
         if: always()
