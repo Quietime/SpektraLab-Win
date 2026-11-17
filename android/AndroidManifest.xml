@@ -5,6 +5,7 @@
  <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="35" />
  <uses-feature android:name="android.hardware.vulkan.compute" android:required="true" android:version="0" />
  <uses-feature android:name="android.hardware.vulkan.version" android:required="true" android:version="4198400" />
+ <queries><intent><action android:name="android.intent.action.VIEW"/><data android:mimeType="application/vnd.android.package-archive"/></intent></queries>
  <application android:label="SpektraLab LightTable" android:icon="@drawable/icon" android:theme="@android:style/Theme.Material.NoActionBar" android:allowBackup="false" android:extractNativeLibs="true" android:usesCleartextTraffic="false" android:hardwareAccelerated="true" android:enableOnBackInvokedCallback="true">
   <meta-data android:name="app.spektralab.update_channel" android:value="android-phone-arm64" />
   <provider android:name="app.spektralab.android.UpdateProvider" android:authorities="app.spektralab.lighttable.updates" android:exported="false" android:grantUriPermissions="true" />
