@@ -1,10 +1,16 @@
 # Draft-only transfer of corresponding source that was audited locally.
-name: Stage corresponding source in draft
+name: Stage verified release assets in draft
 on:
   workflow_dispatch:
     inputs:
       asset_ref:
         description: Exact source-assets commit
+        required: true
+      asset_kind:
+        description: Audited source companions or tested runtime candidates
+        type: choice
+        options: [source, candidate]
+        default: source
         required: true
       draft_tag:
         description: Existing unpublished release
@@ -19,6 +25,7 @@ jobs:
     env:
       ASSET_REF: ${{ inputs.asset_ref }}
       DRAFT_TAG: ${{ inputs.draft_tag }}
+      ASSET_KIND: ${{ inputs.asset_kind }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Validate inputs
@@ -27,6 +34,7 @@ jobs:
           import os,re
           assert re.fullmatch(r'[0-9a-fA-F]{40}',os.environ['ASSET_REF'])
           assert re.fullmatch(r'v[0-9A-Za-z][0-9A-Za-z._-]*',os.environ['DRAFT_TAG'])
+          assert os.environ['ASSET_KIND'] in ('source','candidate')
           PY
       - uses: actions/checkout@v4
         with:
@@ -39,9 +47,13 @@ jobs:
           import hashlib,json,os,subprocess,zipfile
           assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==os.environ['ASSET_REF']
           names={'SpektraLab-source.zip','SOURCE-INDEX.json','Frontend-runtime-dependency-sources.zip','LibRaw-0.22.2.zip','Rust-dependency-sources.zip','Third-Party-Notices-13304.zip','README-SOURCE.txt','SpektraLab-Android-1.3.3-LightTable.3-source.zip'}
-          hashes=json.loads(Path('SOURCE-ASSET-SHA256SUMS.json').read_bytes())
+          manifest='SOURCE-ASSET-SHA256SUMS.json'
+          if os.environ['ASSET_KIND']=='candidate':
+              names={'SpektraLab-Windows-x64-Setup.exe','SpektraLab-Android-Phone.apk','SpektraLab-Android-Tablet.apk','updates.json','updates.json.sig','SHA256SUMS.txt','VALIDATION-13304.json','TEST-REPORT-13304.md'}
+              manifest='SHA256SUMS.json'
+          hashes=json.loads(Path(manifest).read_bytes())
           assert set(hashes)==names
-          assert {p.name for p in Path('.').iterdir()}==names|{'.git','.gitattributes','README.md','SOURCE-ASSET-SHA256SUMS.json'}
+          assert {p.name for p in Path('.').iterdir()}==names|{'.git','.gitattributes','README.md',manifest}
           for name in sorted(names):
               path=Path(name)
               assert path.is_file() and not path.is_symlink() and path.stat().st_size<100*1024*1024
@@ -51,6 +63,17 @@ jobs:
                       assert archive.testzip() is None,name
                       assert all(not p.startswith('/') and '..' not in Path(p).parts for p in archive.namelist()),name
               print('Verified',name,hashes[name])
+          if os.environ['ASSET_KIND']=='candidate':
+              feed=json.loads(Path('updates.json').read_bytes())
+              assert feed['schema']==1 and feed['build']==13304
+              for channel,name in {'windows-x64':'SpektraLab-Windows-x64-Setup.exe','android-phone-arm64':'SpektraLab-Android-Phone.apk','android-tablet-arm64':'SpektraLab-Android-Tablet.apk'}.items():
+                  item=feed['channels'][channel]
+                  assert item['name']==name and item['sha256']==hashes[name]
+                  assert item['bytes']==Path(name).stat().st_size
+              assert len(bytes.fromhex(Path('updates.json.sig').read_text().strip()))==384
+              report=json.loads(Path('VALIDATION-13304.json').read_bytes())
+              assert report['build']==13304 and report['release_gate_passed'] is True
+          
           PY
       - name: Upload to existing unpublished draft only
         run: |
@@ -60,7 +83,9 @@ jobs:
           releases=json.loads(subprocess.check_output(['gh','api',f'repos/{os.environ["GITHUB_REPOSITORY"]}/releases?per_page=100']))
           matched=[r for r in releases if r['tag_name']==os.environ['DRAFT_TAG']]
           assert len(matched)==1 and matched[0]['draft'] is True,'Refusing to create or alter a published release'
-          names=sorted(json.loads(Path('SOURCE-ASSET-SHA256SUMS.json').read_bytes()))
-          subprocess.run(['gh','release','upload',os.environ['DRAFT_TAG'],*names,'SOURCE-ASSET-SHA256SUMS.json','--clobber','--repo',os.environ['GITHUB_REPOSITORY']],check=True)
+          manifest='SOURCE-ASSET-SHA256SUMS.json' if os.environ['ASSET_KIND']=='source' else 'SHA256SUMS.json'
+          names=sorted(json.loads(Path(manifest).read_bytes()))
+          if os.environ['ASSET_KIND']=='source': names.append(manifest)
+          subprocess.run(['gh','release','upload',os.environ['DRAFT_TAG'],*names,'--clobber','--repo',os.environ['GITHUB_REPOSITORY']],check=True)
           print('Corresponding source staged in the existing draft. No publication performed.')
           PY
