@@ -2,7 +2,7 @@
   "schema": 1,
   "build": 13304,
   "version": "1.3.3-lighttable.3",
-  "notes": "Validation candidate: LightTable, bounded image memory, device display adaptation and signed updates. Publication pending full install/upgrade checks.",
+  "notes": "Validation candidate: scoped Android PackageInstaller URI grants, LightTable, bounded memory and signed updates. Publication pending final OS checks.",
   "channels": {
     "windows-x64": {
       "name": "SpektraLab-Windows-x64-Setup.exe",
@@ -14,13 +14,13 @@
     "android-phone-arm64": {
       "name": "SpektraLab-Android-Phone.apk",
       "url": "https://github.com/Quietime/SpektraLab-Win/releases/download/v1.3.3-lighttable.3/SpektraLab-Android-Phone.apk",
-      "sha256": "4c5247cedb1477f474b9b6efbf4216f743dfe4cff5eee4c901916837b8e66334",
+      "sha256": "a6338a6a4f87bdd79e5f01355f202464f05494db21826e90e4931dc148c0fa06",
       "bytes": 17497556
     },
     "android-tablet-arm64": {
       "name": "SpektraLab-Android-Tablet.apk",
       "url": "https://github.com/Quietime/SpektraLab-Win/releases/download/v1.3.3-lighttable.3/SpektraLab-Android-Tablet.apk",
-      "sha256": "d402023b6b7fb8b04df9c1d8e62fd481e672a6c900803dc7e1026aac0273e05b",
+      "sha256": "e57d92ffca6d9807908d2d62119d7f84732087b0bb2b0df8656237e91b60ca82",
       "bytes": 17497556
     }
   }

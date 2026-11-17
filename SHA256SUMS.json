@@ -1,7 +1,7 @@
 {
   "SpektraLab-Windows-x64-Setup.exe": "a2a86f83846d5e416978a85f3acf5fd99f96d5b017cea63a5868ddb358c20773",
-  "SpektraLab-Android-Phone.apk": "4c5247cedb1477f474b9b6efbf4216f743dfe4cff5eee4c901916837b8e66334",
-  "SpektraLab-Android-Tablet.apk": "d402023b6b7fb8b04df9c1d8e62fd481e672a6c900803dc7e1026aac0273e05b",
-  "updates.json": "1a285811125942c58f84fd4679320a5585812951bf0ffc88f68ad6677ff9a209",
-  "updates.json.sig": "42072714128fc1df35d903272e88280a58a728228b2bcc0cc739d3a7c27e148d"
+  "SpektraLab-Android-Phone.apk": "a6338a6a4f87bdd79e5f01355f202464f05494db21826e90e4931dc148c0fa06",
+  "SpektraLab-Android-Tablet.apk": "e57d92ffca6d9807908d2d62119d7f84732087b0bb2b0df8656237e91b60ca82",
+  "updates.json": "bec0302cad8f752fdfca9d709100de0ca0cd7f75cb8622532ab45a2ba307848a",
+  "updates.json.sig": "ca5a9bda672f35b0662db8a8b25f22fc262325eadb9300380fc3ff942f315a80"
 }
