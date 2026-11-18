@@ -3,6 +3,8 @@
 
 import hashlib
 import json
+import os
+import xml.etree.ElementTree as ET
 from pathlib import Path
 import re
 import shutil
@@ -15,6 +17,8 @@ SDK = ROOT / "build/android-sdk"
 TOOLS = SDK / "build-tools/35.0.0"
 KEY = (ROOT / "distribution/updater/public-key.json").read_bytes()
 EXPECTED_PACKAGE = "app.spektralab.lighttable"
+ART = Path(os.environ.get("SPEKTRALAB_ANDROID_OUTPUT", ROOT / "artifacts"))
+EXPECTED_BUILD = int(ET.parse(ROOT / "android/AndroidManifest.xml").getroot().attrib["{http://schemas.android.com/apk/res/android}versionCode"])
 
 
 def command(*args):
@@ -31,15 +35,15 @@ def sha256(path):
 
 def verify(flavor):
     name = flavor.title()
-    apk = ROOT / "artifacts" / f"SpektraLab-Android-{name}-1.3.3-LightTable.apk"
-    alias = ROOT / "artifacts" / f"SpektraLab-Android-{name}.apk"
-    receipt_path = ROOT / "artifacts" / f"ANDROID133-{flavor.upper()}-BUILD-RECEIPT.json"
+    apk = ART / f"SpektraLab-Android-{name}-1.3.3-LightTable.apk"
+    alias = ART / f"SpektraLab-Android-{name}.apk"
+    receipt_path = ART / f"ANDROID133-{flavor.upper()}-BUILD-RECEIPT.json"
     if not apk.is_file() or not alias.is_file() or not receipt_path.is_file():
         raise FileNotFoundError("Missing final APK, stable alias or receipt for " + flavor)
     subprocess.run([str(TOOLS / "apksigner"), "verify", "--verbose", str(apk)], check=True, stdout=subprocess.DEVNULL)
     subprocess.run([str(TOOLS / "zipalign"), "-P", "16", "-c", "4", str(apk)], check=True, stdout=subprocess.DEVNULL)
     badging = command(TOOLS / "aapt2", "dump", "badging", apk)
-    if not re.search(r"package: name='app\.spektralab\.lighttable' versionCode='13304'", badging):
+    if not re.search(rf"package: name='app\.spektralab\.lighttable' versionCode='{EXPECTED_BUILD}'", badging):
         raise ValueError("Wrong installed package or version for " + flavor)
     xml = command(TOOLS / "aapt2", "dump", "xmltree", "--file", "AndroidManifest.xml", apk)
     channel = "android-" + flavor + "-arm64"
@@ -69,7 +73,7 @@ def verify(flavor):
     if digest != sha256(alias):
         raise ValueError("Stable alias differs from versioned APK")
     receipt = json.loads(receipt_path.read_text())
-    if receipt.get("sha256") != digest or receipt.get("bytes") != apk.stat().st_size or receipt.get("channel") != channel or receipt.get("package") != EXPECTED_PACKAGE or receipt.get("build") != 13304:
+    if receipt.get("sha256") != digest or receipt.get("bytes") != apk.stat().st_size or receipt.get("channel") != channel or receipt.get("package") != EXPECTED_PACKAGE or receipt.get("build") != EXPECTED_BUILD:
         raise ValueError("Build receipt does not describe the APK")
     return {"flavor": flavor, "apk": str(apk), "bytes": apk.stat().st_size,
             "sha256": digest, "signer_sha256": match.group(1).lower(),
@@ -92,7 +96,7 @@ def main():
     if reports[0]["signer_sha256"] != reports[1]["signer_sha256"]:
         raise ValueError("Phone and tablet have different signing certificates")
     report = {"arm64_elf_load_align": "0x4000", "apks": reports}
-    destination = ROOT / "build/android-apk-verification.json"
+    destination = ART / "ANDROID-APK-VERIFICATION.json"
     destination.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
 

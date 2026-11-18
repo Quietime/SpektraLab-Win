@@ -58,6 +58,7 @@ std::string vk_error(const char* operation, VkResult result) {
 struct KernelSpec { const char* name; uint32_t bindings; uint32_t workgroup; };
 constexpr KernelSpec kKernels[] = {
     {"spk_math_probe", 2, 1},
+    {"spk_dekker_probe", 2, 1},
     {"spk_take_rgb", 3, kWorkgroup},
     {"spk_matmul3", 4, kWorkgroup},
     {"spk_stride_sample", 3, kWorkgroup},
@@ -290,18 +291,10 @@ public:
             detail = "Vulkan math probe readback failed: " + error;
             return false;
         }
-        // Two acceptable outcomes, and nothing in between:
-        //   fused    -- every residual is the exact one (NVIDIA, AMD, Intel and
-        //               every GPU the Windows port was accepted on);
-        //   unfused  -- every residual is exactly 0 *and* the device is a CPU
-        //               implementation. Mesa's lavapipe lowers fma() to a
-        //               multiply and an add even under `precise` (measured
-        //               2026-10-05, llvmpipe LLVM 20, Mesa 25.2). That is one
-        //               rounding per fma different from a fused device -- far
-        //               inside the 3e-5 render bar -- and it is reported in
-        //               `capabilities.backend.math_mode`, never silently.
-        // Anything else (some residuals right, some wrong; zeroes on a real
-        // GPU) still refuses to start, as it always did.
+        // Fused devices must return every exact residual. A completely
+        // unfused device may use the Dekker specialization only after its
+        // independent product-residual probe passes below. Mixed or wrong
+        // lanes still refuse to start.
         size_t exact = 0, zero = 0;
         for (size_t i = 0; i < n; ++i) {
             // These bounded, positive binary32 inputs have an exact binary64
@@ -315,7 +308,13 @@ public:
             const float a = input[2 * i], b = input[2 * i + 1];
             const float rounded = a * b;
             const float want = float(double(a) * double(b) - double(rounded));
-            if (want == 0.0f) continue;   // carries no information either way
+            if (want == 0.0f) {
+                if (got[i] != 0.0f) {
+                    detail = "Vulkan math probe returned a nonzero residual for an exact product at index " + std::to_string(i);
+                    return false;
+                }
+                continue;   // zero is required, but carries no fusion information
+            }
             if (got[i] == want) ++exact;
             else if (got[i] == 0.0f) ++zero;
             else {
@@ -330,20 +329,48 @@ public:
             detail = "Vulkan probe passed (precise product + fused fma; full shader parity pending)";
             return true;
         }
-        if (zero && !exact && properties_.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU) {
-            // The double-float kernels then take an exact Dekker product
-            // instead of fma (specialization constant 0; see two_prod in
-            // spk_iir_df_acc.comp): without it the IIR blur's low word is lost
-            // and the recursion amplifies it -- 0.4 % on a 257-px constant row.
+        if (zero && !exact) {
+            // Preserve the previously accepted lavapipe CPU case. An Android
+            // GPU may also be unfused, but only if the actual shader's Dekker
+            // low word agrees with the independent binary64 exact residual.
+#ifndef __ANDROID__
+            if (properties_.deviceType != VK_PHYSICAL_DEVICE_TYPE_CPU) {
+                detail = "Vulkan math probe: fma is not fused on a GPU device";
+                return false;
+            }
+#endif
+            if (!dispatch("spk_dekker_probe", {Arg::buf(src), Arg::buf(dst)}, n, error) ||
+                !read(dst.get(), 0, got, sizeof got, error)) {
+                detail = "Vulkan Dekker probe failed: " + error;
+                return false;
+            }
+            size_t informative = 0;
+            for (size_t i = 0; i < n; ++i) {
+                const float a = input[2 * i], b = input[2 * i + 1];
+                const float rounded = a * b;
+                const float want = float(double(a) * double(b) - double(rounded));
+                if (want != 0.0f) ++informative;
+                if (got[i] != want) {
+                    char got_want[96];
+                    std::snprintf(got_want, sizeof got_want, " (got %.9g, want %.9g)", double(got[i]), double(want));
+                    detail = "Vulkan Dekker residual differs at index " + std::to_string(i) + got_want;
+                    return false;
+                }
+            }
+            if (!informative) { detail = "Vulkan Dekker probe produced no informative residuals"; return false; }
+            // The double-float kernels then take the verified Dekker product
+            // instead of fma (specialization constant 0); without its low
+            // word, IIR recursion can amplify a 0.4% error on a constant row.
             fused_fma_ = 0;
-            detail = "Vulkan probe passed on a CPU device with unfused fma (double-float kernels use an "
-                     "exact Dekker product; full shader parity pending)";
-            probe_cpu_storage_range(detail);
+            detail = properties_.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU
+                ? "Vulkan probe passed on a CPU device with unfused fma (exact Dekker residual verified; full shader parity pending)"
+                : "Vulkan probe passed on an Android GPU with unfused fma (exact Dekker residual verified; full shader parity pending)";
+            if (properties_.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU) probe_cpu_storage_range(detail);
             return true;
         }
         if (!exact && !zero) { detail = "Vulkan math probe produced no informative residuals"; return false; }
         detail = zero && exact ? "Vulkan math probe: fma is fused for some lanes and not others"
-                               : "Vulkan math probe: fma is not fused on a GPU device (fast or contracted math?)";
+                               : "Vulkan math probe: unexpected residual classification";
         return false;
     }
 
@@ -541,9 +568,10 @@ public:
         if (n_threads == 0) return true;
         // The specialization the double-float kernels are built with depends
         // on whether this device fuses fma; learn it before the first one.
-        if (fused_fma_ < 0 && kernel && std::strcmp(kernel, "spk_math_probe") != 0) {
+        if (fused_fma_ < 0 && kernel && std::strcmp(kernel, "spk_math_probe") != 0 &&
+            std::strcmp(kernel, "spk_dekker_probe") != 0) {
             std::string detail;
-            if (!check_math_mode(detail)) fused_fma_ = 1;
+            if (!check_math_mode(detail)) { error = detail; return false; }
         }
         const KernelSpec* spec = find_kernel(kernel);
         if (!spec) { error = std::string("Vulkan kernel not ported: ") + (kernel ? kernel : "(null)"); return false; }
@@ -1103,7 +1131,7 @@ private:
             stage.pName = "main";
             // constant_id 0: SPK_FUSED_FMA. Kernels that do not declare it
             // ignore the entry (Vulkan spec, VkSpecializationMapEntry).
-            const VkBool32 fused = fused_fma_ != 0;
+            const VkBool32 fused = std::strcmp(spec.name, "spk_dekker_probe") == 0 ? VK_FALSE : fused_fma_ != 0;
             const VkSpecializationMapEntry entry{0, 0, sizeof(VkBool32)};
             VkSpecializationInfo special{1, &entry, sizeof fused, &fused};
             stage.pSpecializationInfo = &special;

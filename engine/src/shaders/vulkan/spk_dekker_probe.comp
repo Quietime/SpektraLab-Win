@@ -1,0 +1,14 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+
+// Independent startup gate for devices whose fma() does not fuse. Force the
+// same Dekker branch used by float-pair kernels and return its low word.
+layout(local_size_x = 1) in;
+layout(set = 0, binding = 0, std430) readonly buffer Input { float value[]; } input_data;
+layout(set = 0, binding = 1, std430) writeonly buffer Output { float value[]; } output_data;
+#include "spk_float_pair.glsl"
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    output_data.value[i] = spk_df_prod(input_data.value[2 * i], input_data.value[2 * i + 1]).y;
+}

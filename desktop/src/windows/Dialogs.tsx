@@ -387,7 +387,10 @@ export function HostFailure() {
             <p>{st.reason}</p>
             {vulkan && (
               <p className="caption">
-                {tz(
+                {inAndroid() ? tz(
+                  'SpektraLab uses the Vulkan driver built into Android. If the error persists after restarting the engine, check for a system update and include the engine log in your report.',
+                  'SpektraLab 使用 Android 系统自带的 Vulkan 驱动。若重启引擎后仍报错，请检查系统更新，并在反馈时附上引擎日志。',
+                ) : tz(
                   'SpektraLab renders on the GPU through Vulkan. Make sure a Vulkan driver is installed for your graphics card (on Linux: mesa-vulkan-drivers or your vendor’s driver; on Windows: the latest driver from your GPU vendor), then restart the engine.',
                   'SpektraLab 通过 Vulkan 在 GPU 上渲染。请确认已为显卡安装 Vulkan 驱动（Linux：mesa-vulkan-drivers 或厂商驱动；Windows：显卡厂商的最新驱动），然后重启引擎。',
                 )}

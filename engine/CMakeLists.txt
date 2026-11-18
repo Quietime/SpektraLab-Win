@@ -115,7 +115,7 @@ if(NOT APPLE)
         set(vulkan_resource_dir "${CMAKE_CURRENT_BINARY_DIR}/resources")
         set(vulkan_shader_dir "${vulkan_resource_dir}/vulkan")
         set(SPEKTRALAB_VULKAN_KERNELS
-            spk_math_probe spk_take_rgb spk_matmul3 spk_stride_sample
+            spk_math_probe spk_dekker_probe spk_take_rgb spk_matmul3 spk_stride_sample
             spk_affine3 spk_tc_b spk_lut2d_cubic spk_sep_fir_acc spk_iir_df_acc
             spk_lincomb3 spk_log10_guarded spk_curves
             spk_couplers_correction spk_spectral_epilogue

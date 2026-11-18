@@ -3,6 +3,7 @@
 from pathlib import Path
 import hashlib,json,os,shutil,subprocess,zipfile,xml.etree.ElementTree as ET
 ROOT=Path(__file__).resolve().parents[1];BUILD=ROOT/'build';SDK=Path(os.environ.get('ANDROID_HOME',BUILD/'android-sdk'));TOOLS=SDK/'build-tools/35.0.0'
+ART=Path(os.environ.get('SPEKTRALAB_ANDROID_OUTPUT',ROOT/'artifacts'))
 ABIS=os.environ.get('SPEKTRALAB_ANDROID_ABIS','arm64-v8a,x86_64').split(',')
 def run(args,**kw):subprocess.run(list(map(str,args)),check=True,**kw)
 def docker(args):run(['docker','exec','-w','/work','spektralab-build']+args)
@@ -35,6 +36,8 @@ def main():
  compiled=out/'resources.zip';run([TOOLS/'aapt2','compile','--dir',out/'res','-o',compiled])
  ET.register_namespace('android','http://schemas.android.com/apk/res/android')
  manifest=ET.parse(ROOT/'android/AndroidManifest.xml');ns='{http://schemas.android.com/apk/res/android}'
+ build=int(manifest.getroot().attrib[ns+'versionCode'])
+ version=manifest.getroot().attrib[ns+'versionName']
  metadata=manifest.getroot().find("application/meta-data[@"+ns+"name='app.spektralab.update_channel']")
  if metadata is None:raise ValueError('Missing immutable update channel')
  metadata.set(ns+'value',channel)
@@ -48,10 +51,10 @@ def main():
  aligned=out/'aligned.apk';run([TOOLS/'zipalign','-P','16','-f','4',unsigned,aligned])
  key=BUILD/'android-signing.jks';password=BUILD/'android-signing.pass'
  if not key.is_file() or not password.is_file():raise FileNotFoundError('Android signing identity is missing; refusing to create a different key')
- output=ROOT/'artifacts'/f'SpektraLab-Android-{flavor.title()}-1.3.3-LightTable.apk';output.parent.mkdir(exist_ok=True)
+ output=ART/f'SpektraLab-Android-{flavor.title()}-1.3.3-LightTable.apk';output.parent.mkdir(parents=True,exist_ok=True)
  run([TOOLS/'apksigner','sign','--ks',key,'--ks-key-alias','spektralab','--ks-pass','file:'+str(password),'--out',output,aligned])
  run([TOOLS/'apksigner','verify','--verbose',output]);run([TOOLS/'zipalign','-P','16','-c','4',output])
- alias=ROOT/'artifacts'/f'SpektraLab-Android-{flavor.title()}.apk';shutil.copy2(output,alias)
- receipt={'apk':output.name,'stable_alias':alias.name,'build':13304,'version':'1.3.3-lighttable.3','package':'app.spektralab.lighttable','channel':channel,'bytes':output.stat().st_size,'sha256':hashlib.sha256(output.read_bytes()).hexdigest(),'abis':ABIS,'min_android':10,'physical_device_tested':False,'emulator_tested':False}
- (ROOT/'artifacts'/f'ANDROID133-{flavor.upper()}-BUILD-RECEIPT.json').write_text(json.dumps(receipt,indent=2)+'\n');print(json.dumps(receipt,indent=2))
+ alias=ART/f'SpektraLab-Android-{flavor.title()}.apk';shutil.copy2(output,alias)
+ receipt={'apk':output.name,'stable_alias':alias.name,'build':build,'version':version,'package':'app.spektralab.lighttable','channel':channel,'bytes':output.stat().st_size,'sha256':hashlib.sha256(output.read_bytes()).hexdigest(),'abis':ABIS,'min_android':10,'physical_device_tested':False,'emulator_tested':False}
+ (ART/f'ANDROID133-{flavor.upper()}-BUILD-RECEIPT.json').write_text(json.dumps(receipt,indent=2)+'\n');print(json.dumps(receipt,indent=2))
 if __name__=='__main__':main()
