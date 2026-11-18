@@ -4,6 +4,8 @@
 
 **当前为开发中的源码快照，版本 `1.3.3-lighttable.3` / build `13304`，尚未发布通过完整验收的安装包。源码推送不表示测试已全部通过。**
 
+小米 17 Ultra 若遇到 Vulkan “fma is not fused” 启动错误，可手动覆盖安装 13305 手机候选包。APK 与 13304 使用同一签名和包名。该版本加入精确乘积残差自检，实机结果待确认。[下载 APK](https://raw.githubusercontent.com/Quietime/SpektraLab-Win/875c308b51c434865010188b118d9599f48899fd/SpektraLab-Android-Phone.apk)
+
 ## 当前状态（2026-11-17）
 
 | 范围 | 已执行验证 | 待完成 |
