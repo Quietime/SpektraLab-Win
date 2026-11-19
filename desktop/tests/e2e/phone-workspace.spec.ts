@@ -25,6 +25,10 @@ test('phone import shows tappable photos before editing and restores the library
   await expect(page.locator('.phone-adjust')).toHaveCount(0);
   await page.getByRole('button', { name: 'Film', exact: true }).tap();
   await expect(page.getByLabel('Film stock')).toBeVisible();
+  await page.getByRole('button', { name: 'Export', exact: true }).tap();
+  await expect(page.getByLabel('Export format')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save to folder' })).toBeVisible();
+  await page.getByRole('button', { name: '‹ Edit' }).tap();
   await page.locator('.phone-header button').first().tap();
   await expect(photos).toHaveCount(3);
   await page.reload();

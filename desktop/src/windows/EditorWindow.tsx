@@ -22,7 +22,7 @@ export function EditorWindow() {
     {mobile ? <MobileWorkspace /> : <DesktopWorkspace />}
     <SettingsDialog />
     <AboutDialog />
-    <ExportPage />
+    <ExportPage mobile={mobile} />
     <LightTable />
   </>;
 }

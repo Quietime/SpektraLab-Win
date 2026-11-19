@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Checkbox, NumberField, PillMenu, ScrubSlider, Section } from '../controls/controls';
 import { t, tz } from '../i18n';
 import { platform, baseName } from '../platform';
+import { androidCall, inAndroid } from '../mobile/bridge';
 import { select, click, sessionStore, setPages, useSession, resolvedParams, flushPairChanges,flushPendingEdits,resumeFullRender } from '../state/session';
 import {settingsStore,useSettings}from '../state/settings';
 import { Thumb } from '../windows/Filmstrip';
@@ -62,7 +63,7 @@ function waitForDeveloped(path: string, timeoutMs = 600_000): Promise<boolean> {
   });
 }
 
-export function ExportPage() {
+export function ExportPage({ mobile = false }: { mobile?: boolean } = {}) {
   const open = useSession((s) => s.exportOpen);
   const picked = useSession((s) => s.picked);
   const selection = useSession((s) => s.selection);
@@ -79,6 +80,8 @@ export function ExportPage() {
   const output = useOutput();
   const [recipes, setRecipes] = useState<ExportRecipe[]>(DEFAULT_RECIPES);
   const [current, setCurrent] = useState(0);
+  const [choosingFolder, setChoosingFolder] = useState(false);
+  const [folderError, setFolderError] = useState('');
   const [log, setLog] = useState<{ name: string; outcome: ExportOutcome }[]>([]);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [sample, setSample] = useState('');
@@ -131,12 +134,12 @@ export function ExportPage() {
   }, [output,open,mode,r,hello,geometry,adjustments]);
 
   if (!open) return null;
-  const frames = picked.length ? picked : selection ? [selection] : [];
+  const frames = !mobile && picked.length ? picked : selection ? [selection] : [];
   const writesEdits = hostWrites(hello?.methods as string[] | undefined);
   const renderedNative = frameImages.print?.frame?.native ?? native;
   const size = renderedNative ? outputFor(r, printGeometry(resolvedParams(), geometry), renderedNative) : null;
 
-  const run = async () => {
+  const run = async (recipe = r) => {
     stop.current = false;
     setLog([]);
     sessionStore.setState({ batchExporting: true });
@@ -156,7 +159,7 @@ export function ExportPage() {
           continue;
         }
         const outcome = await exportFrame(
-          r,
+          recipe,
           {
             path,
             session: s.engineSession,
@@ -183,6 +186,54 @@ export function ExportPage() {
       else resumeFullRender();
     }
   };
+
+  if (mobile) {
+    const exportToFolder = async () => {
+      setFolderError('');
+      setChoosingFolder(true);
+      try {
+        const title = tz('Choose an export folder', '选择导出文件夹');
+        const folder = inAndroid()
+          ? await androidCall<string | null>('pick_export_folder', { title })
+          : await platform().pickFolder(title);
+        if (folder) await run({ ...r, subfolder: '', folder: { kind: 'fixed', path: folder } });
+      } catch (error) {
+        setFolderError(String(error));
+      } finally {
+        setChoosingFolder(false);
+      }
+    };
+    return <div className="export-page phone-export" data-testid="export-page">
+      <header className="phone-header">
+        <button disabled={batch || choosingFolder} onClick={() => setPages({ exportOpen: false })}>{tz('‹ Edit', '‹ 编辑')}</button>
+        <h1>{tz('Export photo', '导出照片')}</h1>
+      </header>
+      <div className="phone-export-body phone-adjust">
+        {selection && <p className="phone-name">{baseName(selection)}</p>}
+        <label>{tz('Export format', '导出格式')}
+          <select value={String(current)} disabled={batch || choosingFolder} onChange={event => setCurrent(Number(event.currentTarget.value))}>
+            {recipes.map((recipe, index) => <option key={recipe.id} value={String(index)}>{recipe.name}</option>)}
+          </select>
+        </label>
+        {size && <p>{size.width} × {size.height}</p>}
+        {folderError && <p role="alert">{folderError}</p>}
+        {batch && progress && <p role="status">{tz('Exporting…', '正在导出…')} {progress.done} / {progress.total}</p>}
+        {log.map(({ name, outcome }, index) => <div key={index} role={outcome.kind === 'failed' ? 'alert' : 'status'}>
+          {outcome.kind === 'written' ? <>
+            <p>{tz('Saved', '已保存')} · {baseName(outcome.path)}</p>
+            <button onClick={() => void platform().openFile(outcome.path).catch(error => setFolderError(String(error)))}>{tz('Open exported photo', '打开导出的照片')}</button>
+          </> : <p>{name} · {outcome.kind === 'failed' ? outcome.message : tz('Skipped', '已跳过')}</p>}
+        </div>)}
+      </div>
+      <footer className="phone-actions">
+        {batch
+          ? <button onClick={() => { stop.current = true; }}>{tz('Stop', '停止')}</button>
+          : <button className="phone-primary" disabled={choosingFolder || !frames.length} data-testid="export-run" onClick={() => void exportToFolder()}>
+            {choosingFolder ? tz('Choose a folder…', '选择文件夹…') : tz('Save to folder', '保存到文件夹')}
+          </button>}
+      </footer>
+    </div>;
+  }
 
   return (
     <div className="export-page" data-testid="export-page">
