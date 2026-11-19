@@ -7,6 +7,7 @@ test('phone import shows tappable photos before editing and restores the library
   const importButton = page.locator('.phone-actions button');
   await expect(importButton).toBeEnabled();
   await expect(page.locator('.topbar')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Import photos to get started' })).toBeVisible();
   await importButton.tap();
   const photos = page.getByTestId('phone-photo');
   await expect(photos).toHaveCount(3);
@@ -18,8 +19,12 @@ test('phone import shows tappable photos before editing and restores the library
   await expect.poll(() => page.evaluate(() => (window as any).__spk.sessionStore.getState().selection)).toBeTruthy();
   await page.locator('.phone-actions button').first().tap();
   await expect(page.locator('.phone-adjust input')).toHaveCount(3);
+  await page.locator('.phone-adjust input').first().fill('0.5');
+  await expect(page.locator('.phone-adjust output').first()).toHaveText('0.50');
   await page.evaluate(() => window.dispatchEvent(new Event('spektralab-mobile-back', { cancelable: true })));
   await expect(page.locator('.phone-adjust')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Film', exact: true }).tap();
+  await expect(page.getByLabel('Film stock')).toBeVisible();
   await page.locator('.phone-header button').first().tap();
   await expect(photos).toHaveCount(3);
   await page.reload();

@@ -4,7 +4,7 @@ import { tz } from '../i18n';
 import { openLightTable } from '../lighttable/LightTable';
 import { LeftRail } from '../panels/LeftRail';
 import { RightRail } from '../panels/RightRail';
-import { editingAdjustments, openMobileLibrary, redo, renderFullNow, select, selectFilmStock, selectPrintStock, setAdjustments, setOriginal, setPages, setTool, undo, useSession } from '../state/session';
+import { beginGesture, editingAdjustments, openMobileLibrary, redo, renderFullNow, select, selectFilmStock, selectPrintStock, setAdjustments, setOriginal, setPages, setTool, undo, useSession } from '../state/session';
 import { thumbs } from '../state/thumbs';
 import { platform } from '../platform';
 import { androidCall, inAndroid } from './bridge';
@@ -166,8 +166,11 @@ function Adjustments() {
   const grade = useSession(editingAdjustments);
   return <section className="phone-panel phone-adjust" aria-label={tz('Basic adjustments', '基础调整')}>
     {adjustments.map(({ key, label, min, max, step }) => <label key={key}>
-      <span>{tz(...label)} <output>{grade[key].toFixed(step < 1 ? 2 : 0)}</output></span>
-      <input type="range" min={min} max={max} step={step} value={grade[key]} onChange={event => {
+      <span>{tz(label[0], label[1])} <output>{grade[key].toFixed(step < 1 ? 2 : 0)}</output></span>
+      <input type="range" min={min} max={max} step={step} value={grade[key]} onPointerDown={beginGesture}
+        onKeyDown={event => {
+          if (!event.repeat && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) beginGesture();
+        }} onChange={event => {
         const value = Number(event.currentTarget.value);
         setAdjustments(previous => ({ ...previous, [key]: value }), { coalesce: true });
       }} />
