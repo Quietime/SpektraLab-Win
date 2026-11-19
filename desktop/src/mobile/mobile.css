@@ -1,26 +1,68 @@
-/* Phone navigation changes presentation only. Film controls use the same store. */
-html[data-mobile] { --row-height:32px; --section-header:34px; --filmstrip-height:102px; --header-height:44px; }
-html[data-mobile] .editor {display:block;height:calc(100% - 52px - env(safe-area-inset-bottom));}
-html[data-mobile] .centre {height:100%;width:100%;min-width:0;}
-html[data-mobile] .topbar {height:44px;overflow-x:auto;flex-shrink:0;gap:6px;}
-html[data-mobile] .topbar > * {flex-shrink:0;}
-html[data-mobile] .topbar .lighttable-open-btn {width:36px;height:36px;min-width:36px;flex-basis:36px;}
-html[data-mobile] .topbar .bar-status,html[data-mobile] .topbar .bar-gap {display:none;}
-html[data-mobile] .icon-btn {min-width:36px;min-height:36px;}
-html[data-mobile] .rail-shell {position:fixed;top:44px;bottom:calc(52px + env(safe-area-inset-bottom));z-index:25;width:90vw;max-width:340px;box-shadow:0 0 20px #0009;}
-html[data-mobile] .rail-shell[data-side=left] {left:0;}
-html[data-mobile] .rail-shell[data-side=right] {right:0;}
-html[data-mobile] .rail {width:100%;height:100%;}
-html[data-mobile] .rail-resize {display:none;}
-.mobile-tools {position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:flex-start;align-items:center;gap:2px;height:52px;padding:0 4px env(safe-area-inset-bottom);overflow-x:auto;background:var(--card);border-top:1px solid var(--rule);z-index:30;scrollbar-width:none;}
-.mobile-tools::-webkit-scrollbar {display:none;}
-.mobile-tools button {min-height:44px;padding:0 6px;font-size:12px;}
-html[data-mobile] .mobile-tools button[data-testid=mobile-lighttable-open] {min-width:30px;padding:0 4px;font-size:18px;}
-.mobile-tools button[aria-pressed=true] {color:var(--accent);}
-html[data-mobile] .dialog {width:calc(100vw - 20px);max-width:700px;max-height:calc(100dvh - 24px);box-sizing:border-box;}
-html[data-mobile] .export-page {inset:0;}
-html[data-mobile] .export-body {grid-template-columns:1fr;overflow-y:auto;}
-html[data-mobile] .export-rail {max-height:40dvh;overflow:auto;}
-html[data-mobile] .section input[type=range] {min-height:28px;}
-html[data-mobile] .menu-item {min-height:32px;}
-@media (orientation:landscape) and (max-height:500px) {html[data-mobile] {--filmstrip-height:70px;} .mobile-tools {height:44px;} html[data-mobile] .editor{height:calc(100% - 44px);} }
+/* Phone workspace: library first, then a single-photo editor. */
+.phone-workspace {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--ground);
+  font-size: 15px;
+}
+.phone-workspace button {
+  min-height: 48px;
+  min-width: 48px;
+  padding: 6px 12px;
+  background: var(--card);
+  color: inherit;
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  font-size: 14px;
+  touch-action: manipulation;
+}
+.phone-workspace button:disabled { opacity: .5; }
+.phone-workspace button[aria-pressed=true] { color: var(--accent); border-color: var(--accent); }
+.phone-workspace button.phone-primary { background: var(--accent); color: #21180d; font-weight: 700; }
+.phone-header, .phone-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  flex-shrink: 0;
+  background: var(--ground);
+}
+.phone-header { justify-content: space-between; border-bottom: 1px solid var(--rule); }
+.phone-header h1 { margin: 0; font-size: 22px; }
+.phone-header .phone-name { flex: 1; text-align: center; }
+.phone-actions { padding-bottom: calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid var(--rule); }
+.phone-actions button { flex: 1; min-width: 0; padding-inline: 4px; }
+.phone-name { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; }
+.phone-library { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
+.phone-empty { padding: 32px 8px; max-width: 36ch; margin: auto; }
+.phone-empty h2 { font-size: 21px; }
+.phone-empty p, .phone-library-caption, .phone-editor-status { color: var(--secondary-text); }
+.phone-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(125px, 1fr)); gap: 10px; }
+.phone-workspace .phone-photo { width: 100%; min-width: 0; padding: 5px; text-align: left; overflow: hidden; }
+.phone-photo .phone-name { padding: 6px 3px; }
+.phone-thumbnail { position: relative; display: grid; place-items: center; height: clamp(90px, 27vw, 155px); background: #171717; border-radius: 5px; overflow: hidden; }
+.phone-thumbnail img { width: 100%; height: 100%; object-fit: contain; position: absolute; }
+.phone-paging { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 14px; }
+.phone-preview { display: flex; flex: 1; min-height: 0; }
+.phone-editor-status { padding: 0 12px; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.phone-panel { flex: 0 1 auto; max-height: 42%; overflow: auto; border-top: 1px solid var(--rule); background: var(--card); }
+.phone-adjust { padding: 8px 16px; }
+.phone-adjust label { display: block; padding: 4px 0; }
+.phone-adjust label > span { display: flex; justify-content: space-between; }
+.phone-adjust input { display: block; width: 100%; min-height: 44px; margin: 0; accent-color: var(--accent); }
+.phone-advanced .rail { width: 100%; height: auto; }
+.phone-more { position: absolute; z-index: 4; top: 64px; right: 10px; left: 10px; margin-left: auto; max-width: 360px; display: grid; gap: 6px; padding: 10px; border-radius: 12px; background: var(--ground); box-shadow: 0 8px 25px #0009; }
+.phone-message { padding: 8px 12px; margin: 0; overflow-wrap: anywhere; }
+html[data-mobile] .dialog { width: calc(100vw - 20px); max-width: 700px; max-height: calc(100vh - 24px); overflow: auto; box-sizing: border-box; }
+html[data-mobile] .export-page { inset: 0; }
+html[data-mobile] .export-body { grid-template-columns: 1fr; overflow-y: auto; }
+html[data-mobile] .export-rail { max-height: 40vh; overflow: auto; }
+html[data-mobile] .section input[type=range] { min-height: 36px; }
+html[data-mobile] .menu-item { min-height: 44px; }
+.phone-adjust select { display: block; width: 100%; min-height: 48px; margin-top: 5px; padding: 6px 9px; background: var(--ground); color: inherit; border: 1px solid var(--rule); border-radius: 8px; font-size: 16px; }
+.phone-more { max-height: calc(100% - 80px); overflow: auto; }

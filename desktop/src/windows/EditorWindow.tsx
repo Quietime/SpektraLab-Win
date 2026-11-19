@@ -2,8 +2,7 @@
 // Film and Print (left) | top bar + canvas + filmstrip | Parameters (right).
 
 import {inAndroid} from '../mobile/bridge';
-import {setPages,undo,redo,renderFullNow} from '../state/session';
-import {openFilesDialog} from './actions';
+import { MobileWorkspace } from '../mobile/MobileWorkspace';
 import { Canvas } from '../canvas/Canvas';
 import { LeftRail } from '../panels/LeftRail';
 import { RightRail } from '../panels/RightRail';
@@ -15,9 +14,20 @@ import { Filmstrip } from './Filmstrip';
 import { TopBar } from './TopBar';
 import { AboutDialog, HostFailure, SettingsDialog } from './Dialogs';
 import { ExportPage } from '../export/ExportPage';
-import { LightTable, openLightTable } from '../lighttable/LightTable';
+import { LightTable } from '../lighttable/LightTable';
 
 export function EditorWindow() {
+  const mobile = inAndroid() || (import.meta.env.DEV && new URLSearchParams(location.search).has('mobile-workspace'));
+  return <>
+    {mobile ? <MobileWorkspace /> : <DesktopWorkspace />}
+    <SettingsDialog />
+    <AboutDialog />
+    <ExportPage />
+    <LightTable />
+  </>;
+}
+
+function DesktopWorkspace() {
   const left = useSettings((s) => s.leftCollapsed);
   const right = useSettings((s) => s.rightCollapsed);
   const strip = useSettings((s) => s.filmstripCollapsed);
@@ -40,20 +50,6 @@ export function EditorWindow() {
         </main>
         {right ? <div /> : <div className="rail-shell" data-side="right"><RightRail /><RailResize side="right" /></div>}
       </div>
-      {inAndroid()&&<nav className="mobile-tools" aria-label="Mobile tools">
-        <button onClick={()=>void openFilesDialog()}>{tz('Import','导入')}</button>
-        <button aria-pressed={!left} onClick={()=>{settingsStore.getState().set('rightCollapsed',true);settingsStore.getState().set('leftCollapsed',!left);}}>{tz('Film','胶片')}</button>
-        <button aria-pressed={!right} onClick={()=>{settingsStore.getState().set('leftCollapsed',true);settingsStore.getState().set('rightCollapsed',!right);}}>{tz('Adjust','调整')}</button>
-        <button onClick={()=>void renderFullNow()}>{tz('Full','全尺寸')}</button>
-        <button data-testid="mobile-lighttable-open" aria-label={tz('Open light table','打开灯箱')} title={tz('Open light table','打开灯箱')} onClick={openLightTable}>▦</button>
-        <button onClick={undo}>{tz('Undo','撤销')}</button><button onClick={redo}>{tz('Redo','重做')}</button>
-        <button onClick={()=>setPages({exportOpen:true})}>{tz('Export','导出')}</button>
-        <button onClick={()=>setPages({settingsOpen:true})}>{tz('Settings','设置')}</button>
-      </nav>}
-      <SettingsDialog />
-      <AboutDialog />
-      <ExportPage />
-      <LightTable />
     </>
   );
 }

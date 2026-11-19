@@ -91,6 +91,25 @@ public final class MainActivity extends Activity {
  private File sidecar(String image)throws Exception {return area("Sidecars",new File(image).getName()+"-"+digest(image).substring(0,16)+".spektra");}
  private JSONObject entry(File f)throws Exception {return new JSONObject().put("path",f.getAbsolutePath()).put("name",f.getName()).put("size",f.length()).put("mtime_ms",f.lastModified());}
  private JSONArray entries(File dir)throws Exception {JSONArray out=new JSONArray();File[] files=dir.listFiles();if(files!=null){Arrays.sort(files,Comparator.comparing(File::getName,String.CASE_INSENSITIVE_ORDER));for(File f:files)if(f.isFile()&&f.getName().matches(IMAGES))out.put(entry(f));}return out;}
+ private JSONArray importedPhotoPaths()throws IOException {
+  JSONArray paths=new JSONArray();
+  File[] folders=imports.listFiles(File::isDirectory);
+  if(folders==null)return paths;
+  Arrays.sort(folders,Comparator.comparing(File::getName));
+  String prefix=imports.getCanonicalPath()+File.separator;
+  for(File folder:folders){
+   if(!folder.getName().matches("(?:Files|Folder)-[0-9a-f]{16}"))continue;
+   File[] files=folder.listFiles(File::isFile);
+   if(files==null)continue;
+   Arrays.sort(files,Comparator.comparing(File::getName,String.CASE_INSENSITIVE_ORDER));
+   for(File file:files){
+    if(!file.getName().matches(IMAGES))continue;
+    String path=file.getCanonicalPath();
+    if(path.startsWith(prefix))paths.put(path);
+   }
+  }
+  return paths;
+ }
  private Object dispatch(String method,JSONObject p)throws Exception {
   switch(method){
    case "display_info":return displayInfo();
@@ -118,6 +137,7 @@ public final class MainActivity extends Activity {
    case "pair_create":{File f=new File(owned(p.getString("folder")),"Pair-"+UUID.randomUUID()+".spektrapair");atomic(f,p.get("value").toString());return entry(f);}
    case "path_exists":{File f=owned(p.getString("path"));return f.exists()||treeFile(f)!=null;}
    case "ensure_dir":{File f=owned(p.getString("path"));if(!f.isDirectory()&&!f.mkdirs())throw new IOException("Cannot create folder");return true;}
+   case "list_imports":return importedPhotoPaths();
    case "list_images":{File dir=owned(p.getString("dir"));String uri=getPreferences(0).getString("tree:"+dir.getPath(),null);if(uri!=null)importTree(Uri.parse(uri),dir);return entries(dir);}
    case "expand_paths":{JSONArray out=new JSONArray(),paths=p.getJSONArray("paths");for(int i=0;i<paths.length();i++){File f=owned(paths.getString(i));if(f.isDirectory()){JSONArray children=entries(f);for(int j=0;j<children.length();j++)out.put(children.get(j));}else if(f.isFile()&&f.getName().matches(IMAGES))out.put(entry(f));}return out;}
    case "take_launch_paths":return new JSONArray();

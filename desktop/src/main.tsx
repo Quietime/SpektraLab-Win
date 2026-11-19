@@ -25,10 +25,10 @@ if(inAndroid()){
  const saveMobile=async()=>{await flushPairChanges(false);await flushSave(true);await flushFrameOrder();await saveTable();};
  window.addEventListener('spektralab-pause',()=>{void saveMobile().catch(console.error);});
  window.addEventListener('spektralab-close',()=>{
-  const state=sessionStore.getState(),settings=settingsStore.getState();if(state.batchExporting)return;
+  const state=sessionStore.getState();if(state.batchExporting)return;
   if(tableStore.getState().open){window.dispatchEvent(new Event('spektralab-lighttable-back'));return;}
   if(state.exportOpen||state.settingsOpen||state.aboutOpen){setPages({exportOpen:false,settingsOpen:false,aboutOpen:false});return;}
-  if(!settings.leftCollapsed||!settings.rightCollapsed){settings.set('leftCollapsed',true);settings.set('rightCollapsed',true);return;}
+  if(!window.dispatchEvent(new Event('spektralab-mobile-back',{cancelable:true})))return;
   void saveMobile().then(()=>androidCall('finish')).catch(console.error);
  });
  if(!localStorage.getItem('spektralab-mobile-defaults')){

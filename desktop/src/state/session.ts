@@ -894,7 +894,18 @@ export async function openPaths(paths: string[]) {
   }
 }
 
-async function setLibrary(folder: string, files: FileEntry[]) {
+/** Mobile import opens the library before starting any full image decode. */
+export async function openMobileLibrary(paths: string[], append = true): Promise<string[]> {
+  if (get().batchExporting || !paths.length) return [];
+  const imported = await platform().expandPaths(paths);
+  if (!imported.length) return [];
+  const rows = new Map((append ? get().frames : []).map(frame => [frame.path, frame]));
+  for (const frame of imported) rows.set(frame.path, frame);
+  await setLibrary(dirName(imported[0]!.path), [...rows.values()], false);
+  return get().frames.map(frame => frame.path);
+}
+
+async function setLibrary(folder: string, files: FileEntry[], readThumbnailGeometry = true) {
   await flushPairChanges(false);
   await flushSave();
   await closeEngineSession();
@@ -908,6 +919,7 @@ async function setLibrary(folder: string, files: FileEntry[]) {
   frameImages.original = null;
   set({ folder, frames: files, selection: null, picked: [], savedGeometry: {}, thumbVersion: get().thumbVersion + 1, imageVersion: get().imageVersion + 1, badge: null });
   void platform().setTitle(`SpektraLab — ${baseName(folder)}`);
+  if (!readThumbnailGeometry) return;
   // The thumbnails' crop masks come from each frame's saved geometry.
   void Promise.all(
     files.map(async (f) => {
