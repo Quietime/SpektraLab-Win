@@ -95,19 +95,20 @@ public final class MainActivity extends Activity {
   JSONArray paths=new JSONArray();
   File[] folders=imports.listFiles(File::isDirectory);
   if(folders==null)return paths;
-  Arrays.sort(folders,Comparator.comparing(File::getName));
+  List<File> photos=new ArrayList<>();
   String prefix=imports.getCanonicalPath()+File.separator;
   for(File folder:folders){
    if(!folder.getName().matches("(?:Files|Folder)-[0-9a-f]{16}"))continue;
    File[] files=folder.listFiles(File::isFile);
    if(files==null)continue;
-   Arrays.sort(files,Comparator.comparing(File::getName,String.CASE_INSENSITIVE_ORDER));
    for(File file:files){
     if(!file.getName().matches(IMAGES))continue;
     String path=file.getCanonicalPath();
-    if(path.startsWith(prefix))paths.put(path);
+    if(path.startsWith(prefix))photos.add(new File(path));
    }
   }
+  photos.sort(Comparator.comparingLong(File::lastModified).reversed().thenComparing(File::getPath));
+  for(File photo:photos)paths.put(photo.getPath());
   return paths;
  }
  private Object dispatch(String method,JSONObject p)throws Exception {

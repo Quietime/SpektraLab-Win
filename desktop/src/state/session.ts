@@ -899,8 +899,12 @@ export async function openMobileLibrary(paths: string[], append = true): Promise
   if (get().batchExporting || !paths.length) return [];
   const imported = await platform().expandPaths(paths);
   if (!imported.length) return [];
-  const rows = new Map((append ? get().frames : []).map(frame => [frame.path, frame]));
-  for (const frame of imported) rows.set(frame.path, frame);
+  const rows = new Map(imported.map(frame => [frame.path, frame]));
+  if (append) {
+    for (const frame of get().frames) {
+      if (!rows.has(frame.path)) rows.set(frame.path, frame);
+    }
+  }
   await setLibrary(dirName(imported[0]!.path), [...rows.values()], false);
   return get().frames.map(frame => frame.path);
 }
@@ -909,7 +913,7 @@ async function setLibrary(folder: string, files: FileEntry[], readThumbnailGeome
   await flushPairChanges(false);
   await flushSave();
   await closeEngineSession();
-  const orderFolder = frameOrderFolder(files);
+  const orderFolder = readThumbnailGeometry ? frameOrderFolder(files) : null;
   if (orderFolder) {
     const names = await platform().storeRead('FrameOrder', await frameOrderKey(orderFolder)).catch(() => null);
     files = applyFrameOrder(files, names);

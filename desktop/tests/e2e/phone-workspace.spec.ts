@@ -34,3 +34,21 @@ test('phone import shows tappable photos before editing and restores the library
   await page.reload();
   await expect(photos).toHaveCount(3);
 });
+
+test('new imports appear first when the existing library spans pages', async ({ page }) => {
+  await page.addInitScript(() => {
+    if (!localStorage.getItem('spektralab-phone-library-v1')) {
+      const paths = Array.from({ length: 25 }, (_, i) => `/older/roll-${i}.jpg`);
+      localStorage.setItem('spektralab-phone-library-v1', JSON.stringify(paths));
+    }
+  });
+  await page.goto('/?mobile-workspace');
+  const photos = page.getByTestId('phone-photo');
+  await expect(photos).toHaveCount(24);
+  await expect(photos.first()).toContainText('roll-0.jpg');
+  await page.getByRole('button', { name: 'Import photos', exact: true }).tap();
+  await expect(photos.first()).toContainText('DSC_0001.NEF');
+  await expect(photos.nth(3)).toContainText('roll-0.jpg');
+  await page.getByRole('button', { name: 'Next page' }).tap();
+  await expect(photos).toHaveCount(4);
+});
