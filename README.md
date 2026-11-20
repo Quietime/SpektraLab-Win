@@ -4,7 +4,7 @@
 
 **当前为开发中的源码快照，版本 `1.3.3-lighttable.3` / build `13304`，尚未发布通过完整验收的安装包。源码推送不表示测试已全部通过。**
 
-手机版 13307 提供独立的「照片 → 编辑 → 导出」工作流，包含可点按的照片卡片、大触控按钮、旧导入恢复、最新照片置顶、常用调整和系统文件夹导出。可直接覆盖旧版，签名和包名一致。触屏浏览器流程与 APK 校验已通过，小米 17 Ultra 的实机界面结果待确认。[下载手机版 13307 APK](https://raw.githubusercontent.com/Quietime/SpektraLab-Win/058cf3f328647461bfb0d5fc55295eedde3233e9/SpektraLab-Android-Phone.apk)
+Android 13308 支持独立照片页、单张编辑和系统文件夹导出。照片页可直接打开看片台，裁切有「完成」按钮，平板横屏在照片右侧显示调整工具。安装包沿用原签名和包名。Web 触控与布局测试已通过，Android 实机结果待确认。[手机版 APK](https://raw.githubusercontent.com/Quietime/SpektraLab-Win/50581365552fe348d07471951d671212cd4d0789/SpektraLab-Android-Phone.apk) · [平板版 APK](https://raw.githubusercontent.com/Quietime/SpektraLab-Win/50581365552fe348d07471951d671212cd4d0789/SpektraLab-Android-Tablet.apk)
 
 ## 当前状态（2026-11-17）
 
