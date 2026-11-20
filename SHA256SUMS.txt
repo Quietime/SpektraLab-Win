@@ -1,1 +1,2 @@
-aa98572b8fe73c0b419acd8ae9667be5fcf27d7ce623ca88a3bc2e063e42169f  SpektraLab-Android-Phone.apk
+467967fbd01f39f68d6251aab98a6d66bd232e3cd462583fbb79d8a566217ccf  SpektraLab-Android-Phone.apk
+f59895f61465a1dd7be45fd5d8981c69f06025f93ae6e7890951d6c50467059e  SpektraLab-Android-Tablet.apk
