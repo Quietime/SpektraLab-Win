@@ -422,7 +422,7 @@ export function LightTable() {
       <button className="lt-close" data-testid="lt-close" aria-label={tz('Close light table', '关闭灯箱')} title={tz('Close light table (Esc)', '关闭灯箱（Esc）')} onClick={back}>×</button>
       <strong>{tz('Light table', '灯箱')}</strong>
       <div className="lt-trays" role="tablist" aria-label={tz('Trays', '底片盘')}>
-        {tableDocument.trays.map((tray) => <button type="button" role="tab" data-testid="lt-tray" key={tray.id} aria-selected={tray.id === active?.id} aria-pressed={tray.id === active?.id} onClick={() => changeTable((doc) => ({ ...doc, active: tray.id }))}>{tray.name}</button>)}
+        {tableDocument.trays.map((tray) => <button type="button" role="tab" data-testid="lt-tray" key={tray.id} aria-selected={tray.id === active?.id} onClick={() => changeTable((doc) => ({ ...doc, active: tray.id }))}>{tray.name}</button>)}
       </div>
       <button className="btn" data-testid="lt-new-tray" disabled={!ready || tableDocument.trays.length >= MAX_TRAYS} onClick={newTray}>+ {tz('Tray', '底片盘')}</button>
       <button className="btn" data-testid="lt-add-photos" disabled={!ready} onClick={() => void importPhotos()}><Import /> {tz('Add photos', '添加照片')}</button>

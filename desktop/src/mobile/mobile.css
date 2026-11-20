@@ -130,6 +130,7 @@
   color: var(--mobile-muted);
 }
 .phone-frame-nav button { background: transparent; border-color: transparent; }
+.phone-edit-footer { display: flex; flex-direction: column; flex-shrink: 0; }
 .phone-panel {
   flex: 0 1 auto;
   max-height: 48%;
@@ -224,6 +225,21 @@ html[data-mobile] .menu-item { min-height: 44px; }
     border-top: 0;
     border-left: 1px solid var(--mobile-rule);
   }
+  /* One bottom bar on a landscape tablet: browsing sits beside the actions
+     instead of taking a second 48 px row from the photograph. */
+  .phone-edit-footer {
+    flex-direction: row;
+    align-items: stretch;
+    background: var(--mobile-surface);
+    border-top: 1px solid var(--mobile-rule);
+  }
+  .phone-edit-footer .phone-frame-nav {
+    flex: none;
+    gap: 6px;
+    padding: 10px 0 calc(10px + env(safe-area-inset-bottom)) 14px;
+    border-top: 0;
+  }
+  .phone-edit-footer .phone-actions { flex: 1; min-width: 0; border-top: 0; }
   .phone-tone-tabs { display: none; }
   .phone-tone-field, .phone-tone-field.active {
     display: grid;

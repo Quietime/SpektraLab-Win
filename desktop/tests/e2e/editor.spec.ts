@@ -388,3 +388,20 @@ test('the export page names the file and holds the frame while it runs', async (
   await expect.poll(() => state(page, 's.batchExporting')).toBe(false);
   await expect(page.getByTestId('export-page')).toContainText('DSC_0001');
 });
+
+test('film and paper lists are named and keyboard-operable without stepping frames',async({page})=>{
+  await openRoll(page);
+  const films=page.getByRole('listbox',{name:'Film'});
+  await expect(films).toHaveAttribute('data-testid','film-list');
+  await expect(page.getByTestId('paper-list')).toHaveAttribute('aria-label',/.+/);
+  const frame=await state(page,'s.selection');
+  const before=await state(page,'s.sidecar.params.filmStock');
+  await films.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect.poll(()=>state(page,'s.sidecar.params.filmStock')).not.toBe(before);
+  const moved=await state(page,'s.sidecar.params.filmStock');
+  await expect(films).toHaveAttribute('aria-activedescendant',`film-list-opt-${moved}`);
+  await page.keyboard.press('ArrowUp');
+  await expect.poll(()=>state(page,'s.sidecar.params.filmStock')).toBe(before);
+  expect(await state(page,'s.selection')).toBe(frame);
+});

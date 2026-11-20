@@ -160,6 +160,7 @@ export function MobileWorkspace() {
       {panel === 'advanced-film' && <section className="phone-panel phone-advanced" aria-label={tz('Film and paper', '胶片与相纸')}><LeftRail /></section>}
       {panel === 'advanced' && <section className="phone-panel phone-advanced" aria-label={tz('Advanced adjustments', '高级调整')}><RightRail /></section>}
       </div>
+      <div className="phone-edit-footer">
       {frames.length > 1 && currentIndex >= 0 && !cropping && <nav className="phone-frame-nav" aria-label={tz('Browse photos', '浏览照片')}>
         <button disabled={opening || currentIndex === 0} onClick={() => openPhoto(frames[currentIndex - 1]!.path)}>{tz('‹ Previous', '‹ 上一张')}</button>
         <span>{currentIndex + 1} / {frames.length}</span>
@@ -171,6 +172,7 @@ export function MobileWorkspace() {
         <button disabled={opening} aria-pressed={original} onClick={() => setOriginal(!original)}>{tz('Original', '原图')}</button>
         <button className="phone-primary" disabled={opening || !current || !ready} onClick={() => { setPanel(null); setPages({ exportOpen: true }); }}>{tz('Export', '导出')}</button>
       </nav>
+      </div>
     </>}
     {panel === 'more' && <section className="phone-more" aria-label={tz('More actions', '更多操作')}>
       {screen === 'edit' && <><button onClick={() => { undo(); setPanel(null); }}>{tz('Undo', '撤销')}</button>
@@ -219,18 +221,26 @@ function Film() {
   const film = useSession(s => s.sidecar.params.filmStock);
   const paper = useSession(s => s.sidecar.params.printStock);
   const positive = catalog.isPositive(film);
-  const films = catalog.filmGroups().flatMap(group => group.films);
-  const papers = catalog.paperGroups().flatMap(group => group.papers)
-    .filter(stock => catalog.canPrint(film, stock.id));
+  // Grouped like the desktop lists, so Android's native picker shows the
+  // same Positive / Negative / Black & White and Still / Cine sections.
+  const filmGroups = catalog.filmGroups().filter(group => group.films.length);
+  const paperGroups = catalog.paperGroups()
+    .map(group => ({ ...group, papers: group.papers.filter(stock => catalog.canPrint(film, stock.id)) }))
+    .filter(group => group.papers.length);
+  const filmGroupName = (title: string) => title === 'Positive' ? tz('Positive', '正片') : title === 'Black & White' ? tz('Black & White', '黑白') : tz('Negative', '负片');
   return <section className="phone-panel phone-adjust" aria-label={tz('Film and paper', '胶片与相纸')}>
     <label>{tz('Film stock', '胶片型号')}
       <select value={film} onChange={event => selectFilmStock(event.currentTarget.value)}>
-        {films.map(stock => <option key={stock.id} value={stock.id}>{stock.name}</option>)}
+        {filmGroups.map(group => <optgroup key={group.title} label={filmGroupName(group.title)}>
+          {group.films.map(stock => <option key={stock.id} value={stock.id}>{stock.name}</option>)}
+        </optgroup>)}
       </select>
     </label>
     {!positive && <label>{tz('Print paper', '相纸')}
       <select value={paper} onChange={event => selectPrintStock(event.currentTarget.value)}>
-        {papers.map(stock => <option key={stock.id} value={stock.id}>{stock.name}</option>)}
+        {paperGroups.map(group => <optgroup key={group.title} label={group.title === 'Cine' ? tz('Cine', '电影') : tz('Still', '照片')}>
+          {group.papers.map(stock => <option key={stock.id} value={stock.id}>{stock.name}</option>)}
+        </optgroup>)}
       </select>
     </label>}
   </section>;
