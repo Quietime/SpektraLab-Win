@@ -1,92 +1,236 @@
-/* Phone workspace: library first, then a single-photo editor. */
-.phone-workspace {
-  position: relative;
+/* A contact sheet for browsing, neutral surround for grading, and one
+   high-contrast action per screen. These surfaces are local to mobile. */
+.phone-workspace, .phone-export {
+  --mobile-background: #181817;
+  --mobile-surface: #232220;
+  --mobile-raised: #302d29;
+  --mobile-rule: #49443d;
+  --mobile-muted: #c6bdb1;
+  --mobile-accent: #f1bb78;
+  --mobile-ink: #24180e;
+  --mobile-radius: 14px;
   display: flex;
   flex-direction: column;
-  width: 100%;
-  height: 100%;
   min-height: 0;
   overflow: hidden;
-  background: var(--card);
+  background: var(--mobile-background);
+  color: #f8f2e9;
   font-size: 15px;
 }
-.phone-workspace button {
+.phone-workspace { position: relative; width: 100%; height: 100%; }
+.phone-workspace button, .phone-export button {
   min-height: 48px;
   min-width: 48px;
   padding: 6px 12px;
-  background: var(--card);
   color: inherit;
-  border: 1px solid var(--rule);
-  border-radius: 9px;
+  background: var(--mobile-raised);
+  border: 1px solid var(--mobile-rule);
+  border-radius: 10px;
   font-size: 14px;
   touch-action: manipulation;
 }
-.phone-workspace button:disabled { opacity: .5; }
-.phone-workspace button[aria-pressed=true] { color: var(--accent); border-color: var(--accent); }
-.phone-workspace button.phone-primary { background: var(--accent); color: #21180d; font-weight: 700; }
+.phone-workspace button:disabled, .phone-export button:disabled { opacity: .55; }
+.phone-workspace button[aria-pressed=true] {
+  color: var(--mobile-accent);
+  border-color: var(--mobile-accent);
+}
+.phone-workspace button.phone-primary, .phone-export button.phone-primary {
+  background: var(--mobile-accent);
+  border-color: var(--mobile-accent);
+  color: var(--mobile-ink);
+  font-weight: 700;
+}
+
 .phone-header, .phone-actions {
+  flex-shrink: 0;
+  padding: 10px 14px;
+  background: var(--mobile-surface);
+}
+.phone-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  flex-shrink: 0;
-  background: var(--card);
+  justify-content: space-between;
+  border-bottom: 1px solid var(--mobile-rule);
 }
-.phone-header { justify-content: space-between; border-bottom: 1px solid var(--rule); }
-.phone-header h1 { margin: 0; font-size: 22px; }
+.phone-header > * + * { margin-left: 10px; }
+.phone-header h1 {
+  margin: 0;
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: -.025em;
+}
 .phone-header .phone-name { flex: 1; text-align: center; }
-.phone-actions { padding-bottom: calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid var(--rule); }
-.phone-actions button { flex: 1; min-width: 0; padding-inline: 4px; }
-.phone-name { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; }
-.phone-library { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
-.phone-empty { padding: 32px 8px; max-width: 36ch; margin: auto; }
-.phone-empty h2 { font-size: 21px; }
-.phone-empty p, .phone-library-caption, .phone-editor-status { color: var(--secondary-text); }
-.phone-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(125px, 1fr)); gap: 10px; }
-.phone-workspace .phone-photo { width: 100%; min-width: 0; padding: 5px; text-align: left; overflow: hidden; background: var(--plot); }
-.phone-photo .phone-name { padding: 6px 3px; }
-.phone-thumbnail { position: relative; display: grid; place-items: center; height: clamp(90px, 27vw, 155px); background: #171717; border-radius: 5px; overflow: hidden; }
-.phone-thumbnail img { width: 100%; height: 100%; object-fit: contain; position: absolute; }
-.phone-paging { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 14px; }
-.phone-edit-workarea, .phone-preview-region { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
-.phone-preview { display: flex; flex: 1; min-height: 0; }
-.phone-preview .canvas-wrap { background: var(--navigator-well); }
-.phone-editor-status:not(:empty) { padding-block: 5px; }
-.phone-library-actions .phone-primary { flex: 2; }
-.phone-actions button:focus-visible, .phone-header button:focus-visible, .phone-photo:focus-visible {
-  outline: 2px solid var(--accent);
+.phone-library-title { display: flex; align-items: baseline; flex-wrap: wrap; min-width: 0; }
+.phone-library-title span { margin-left: 10px; font-size: 13px; color: var(--mobile-muted); }
+.phone-actions {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--mobile-rule);
+}
+.phone-actions button { min-width: 0; padding-inline: 4px; }
+.phone-library-actions { grid-template-columns: minmax(0, 1fr) minmax(0, 1.8fr); }
+.phone-edit-actions { grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.2fr); }
+.phone-workspace :focus-visible, .phone-export :focus-visible {
+  outline: 2px solid var(--mobile-accent);
   outline-offset: -3px;
 }
-.phone-editor-status { padding: 0 12px; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.phone-panel { flex: 0 1 auto; max-height: 42%; overflow: auto; border-top: 1px solid var(--rule); background: var(--card); }
-.phone-adjust { padding: 8px 16px; }
+
+.phone-name { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; }
+.phone-library { flex: 1; min-height: 0; overflow: auto; padding: 14px; }
+.phone-empty { padding: 36px 4px; max-width: 37ch; margin: auto; }
+.phone-empty h2 { margin: 0 0 10px; font-size: 26px; line-height: 1.17; }
+.phone-empty p, .phone-editor-status { color: var(--mobile-muted); line-height: 1.5; }
+.phone-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 12px; }
+.phone-workspace .phone-photo {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  overflow: hidden;
+  background: var(--mobile-surface);
+  border-radius: var(--mobile-radius);
+}
+.phone-thumbnail {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding-bottom: 72%;
+  background: #101010;
+  overflow: hidden;
+}
+.phone-thumbnail img, .phone-thumbnail > span { position: absolute; }
+.phone-thumbnail img { inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.phone-thumbnail > span { color: var(--mobile-muted); }
+.phone-photo-caption { display: flex; justify-content: space-between; align-items: center; padding: 10px; }
+.phone-photo-caption .phone-name { flex: 1; }
+.phone-photo-extension { flex: 0 0 auto; margin-left: 6px; color: var(--mobile-muted); font-size: 11px; }
+.phone-paging { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
+
+.phone-edit-workarea, .phone-preview-region {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.phone-preview { display: flex; flex: 1; min-height: 0; }
+.phone-preview .canvas-wrap { background: var(--navigator-well); }
+.phone-editor-status { padding: 0 14px; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.phone-editor-status:not(:empty) { padding-block: 5px; }
+.phone-frame-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 0 14px;
+  border-top: 1px solid var(--mobile-rule);
+  color: var(--mobile-muted);
+}
+.phone-frame-nav button { background: transparent; border-color: transparent; }
+.phone-panel {
+  flex: 0 1 auto;
+  max-height: 48%;
+  overflow: auto;
+  border-top: 1px solid var(--mobile-rule);
+  background: var(--mobile-surface);
+}
+.phone-adjust { padding: 12px 14px; }
 .phone-adjust label { display: block; padding: 4px 0; }
 .phone-adjust label > span { display: flex; justify-content: space-between; }
-.phone-adjust input { display: block; width: 100%; min-height: 44px; margin: 0; accent-color: var(--accent); }
+.phone-adjust output { font-variant-numeric: tabular-nums; color: var(--mobile-accent); }
+.phone-adjust input[type=range] { display: block; width: 100%; min-height: 44px; margin: 0; accent-color: var(--mobile-accent); }
+.phone-adjust select {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: var(--mobile-background);
+  color: inherit;
+  border: 1px solid var(--mobile-rule);
+  border-radius: 8px;
+  font-size: 16px;
+}
+.phone-tone-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 8px; }
+.phone-tone-tabs button { min-width: 0; padding-inline: 4px; }
+.phone-tone-field { display: none; }
+.phone-tone-field.active { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
 .phone-advanced .rail { width: 100%; height: auto; }
-.phone-more { position: absolute; z-index: 4; top: 64px; right: 10px; left: 10px; margin-left: auto; max-width: 360px; display: grid; gap: 6px; padding: 10px; border-radius: 12px; background: var(--ground); box-shadow: 0 8px 25px #0009; }
-.phone-message { padding: 8px 12px; margin: 0; overflow-wrap: anywhere; }
+.phone-more {
+  position: absolute;
+  z-index: 4;
+  top: 68px;
+  right: 14px;
+  left: 14px;
+  margin-left: auto;
+  width: auto;
+  max-width: 360px;
+  max-height: calc(100% - 84px);
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--mobile-rule);
+  border-radius: var(--mobile-radius);
+  background: var(--mobile-surface);
+  box-shadow: 0 10px 24px #0008;
+}
+.phone-message { padding: 8px 14px; margin: 0; overflow-wrap: anywhere; }
+
 html[data-mobile] .dialog { width: calc(100vw - 20px); max-width: 700px; max-height: calc(100vh - 24px); overflow: auto; box-sizing: border-box; }
 html[data-mobile] .export-page { inset: 0; }
 html[data-mobile] .export-body { grid-template-columns: 1fr; overflow-y: auto; }
 html[data-mobile] .export-rail { max-height: 40vh; overflow: auto; }
 html[data-mobile] .section input[type=range] { min-height: 36px; }
 html[data-mobile] .menu-item { min-height: 44px; }
-.phone-adjust select { display: block; width: 100%; min-height: 48px; margin-top: 5px; padding: 6px 9px; background: var(--ground); color: inherit; border: 1px solid var(--rule); border-radius: 8px; font-size: 16px; }
-.phone-more { max-height: calc(100% - 80px); overflow: auto; }
-.phone-export { display: flex; flex-direction: column; font-size: 15px; background: var(--ground); }
-.phone-export-body { flex: 1; min-height: 0; overflow: auto; }
-.phone-export button { min-height: 48px; min-width: 48px; padding: 6px 12px; border: 1px solid var(--rule); border-radius: 9px; }
-.phone-export button.phone-primary { background: var(--accent); color: #21180d; font-weight: 700; }
+.phone-export-body { flex: 1; min-height: 0; overflow: auto; width: 100%; max-width: 640px; margin-inline: auto; }
+.phone-export-summary {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  background: var(--mobile-surface);
+  border: 1px solid var(--mobile-rule);
+  border-radius: var(--mobile-radius);
+}
+.phone-export-summary span { color: var(--mobile-muted); font-size: 13px; }
+.phone-export-formats { min-width: 0; margin: 16px 0; padding: 0; border: 0; }
+.phone-export-formats legend { margin-bottom: 8px; font-weight: 650; }
+.phone-export-formats .phone-export-option {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  background: var(--mobile-surface);
+  border: 1px solid var(--mobile-rule);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.phone-export-option input { margin: 0 10px 0 0; width: 18px; height: 18px; accent-color: var(--mobile-accent); }
+.phone-export-option input:checked + span { color: var(--mobile-accent); font-weight: 650; }
 
 @media (min-width: 720px) and (orientation: landscape) {
+  .phone-library { padding: 20px; }
+  .phone-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; }
   .phone-edit-workarea.with-panel {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(270px, 32%);
+    grid-template-columns: minmax(0, 1fr) minmax(288px, 29%);
   }
   .phone-edit-workarea.with-panel .phone-panel {
     max-height: none;
     border-top: 0;
-    border-left: 1px solid var(--rule);
+    border-left: 1px solid var(--mobile-rule);
+  }
+  .phone-tone-tabs { display: none; }
+  .phone-tone-field, .phone-tone-field.active {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding-block: 9px;
+    border-bottom: 1px solid var(--mobile-rule);
   }
 }

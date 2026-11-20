@@ -209,13 +209,17 @@ export function ExportPage({ mobile = false }: { mobile?: boolean } = {}) {
         <h1>{tz('Export photo', '导出照片')}</h1>
       </header>
       <div className="phone-export-body phone-adjust">
-        {selection && <p className="phone-name">{baseName(selection)}</p>}
-        <label>{tz('Export format', '导出格式')}
-          <select value={String(current)} disabled={batch || choosingFolder} onChange={event => setCurrent(Number(event.currentTarget.value))}>
-            {recipes.map((recipe, index) => <option key={recipe.id} value={String(index)}>{recipe.name}</option>)}
-          </select>
-        </label>
-        {size && <p>{size.width} × {size.height}</p>}
+        {selection && <div className="phone-export-summary">
+          <strong className="phone-name">{baseName(selection)}</strong>
+          {size && <span>{size.width} × {size.height} px</span>}
+        </div>}
+        <fieldset className="phone-export-formats" disabled={batch || choosingFolder}>
+          <legend>{tz('Export format', '导出格式')}</legend>
+          {recipes.map((recipe, index) => <label className="phone-export-option" key={recipe.id}>
+            <input type="radio" name="phone-export-format" checked={index === current} onChange={() => setCurrent(index)} />
+            <span>{recipe.name}</span>
+          </label>)}
+        </fieldset>
         {folderError && <p role="alert">{folderError}</p>}
         {batch && progress && <p role="status">{tz('Exporting…', '正在导出…')} {progress.done} / {progress.total}</p>}
         {log.map(({ name, outcome }, index) => <div key={index} role={outcome.kind === 'failed' ? 'alert' : 'status'}>

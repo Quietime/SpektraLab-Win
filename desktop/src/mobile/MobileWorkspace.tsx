@@ -36,7 +36,8 @@ export function MobileWorkspace() {
   const [message, setMessage] = useState('');
   const [, refreshThumbs] = useState(0);
   const restored = useRef(false);
-  const current = frames.find(frame => frame.path === selection);
+  const currentIndex = frames.findIndex(frame => frame.path === selection);
+  const current = frames[currentIndex];
   const pageCount = Math.max(1, Math.ceil(frames.length / PAGE_SIZE));
   const visiblePage = Math.min(page, pageCount - 1);
 
@@ -107,7 +108,10 @@ export function MobileWorkspace() {
   const showPanel = panel !== null && panel !== 'more';
   return <div className="phone-workspace" data-testid="editor">
     <header className="phone-header">
-      {screen === 'edit' ? <button onClick={() => { setPanel(null); if (cropping) setTool('hand'); setScreen('photos'); }}>{tz('‹ Photos', '‹ 照片')}</button> : <h1>{tz('Photos', '照片')}</h1>}
+      {screen === 'edit' ? <button onClick={() => { setPanel(null); if (cropping) setTool('hand'); setScreen('photos'); }}>{tz('‹ Photos', '‹ 照片')}</button> : <div className="phone-library-title">
+        <h1>{tz('Photos', '照片')}</h1>
+        {frames.length > 0 && <span>{tz(`${frames.length} photo${frames.length === 1 ? '' : 's'}`, `${frames.length} 张照片`)}</span>}
+      </div>}
       {screen === 'edit' && current && <span className="phone-name">{current.name}</span>}
       {cropping
         ? <button className="phone-primary" onClick={() => setTool('hand')}>{tz('Done', '完成')}</button>
@@ -123,13 +127,15 @@ export function MobileWorkspace() {
           {!ready && <p role="status">{tz('Preparing the render engine…', '正在准备渲染引擎…')}</p>}
           {ready && !busy && status && <p role="status">{status}</p>}
         </div> : <>
-          <p className="phone-library-caption">{tz('Tap a photo to edit', '点按照片进入编辑')} · {frames.length}</p>
           <div className="phone-grid">
             {frames.slice(visiblePage * PAGE_SIZE, (visiblePage + 1) * PAGE_SIZE).map(frame => {
               const thumbnail = ready ? thumbs.get(frame.path) : null;
-              return <button className="phone-photo" data-testid="phone-photo" key={frame.path} onClick={() => openPhoto(frame.path)} disabled={!ready || opening}>
+              return <button className="phone-photo" data-testid="phone-photo" aria-label={frame.name} key={frame.path} onClick={() => openPhoto(frame.path)} disabled={!ready || opening}>
                 <div className="phone-thumbnail">{thumbnail ? <img src={thumbnail} alt="" /> : <span>{tz('Photo', '照片')}</span>}</div>
-                <span className="phone-name">{frame.name}</span>
+                <span className="phone-photo-caption">
+                  <span className="phone-name">{frame.name.replace(/\.[^.]+$/, '')}</span>
+                  <span className="phone-photo-extension">{frame.name.includes('.') ? frame.name.split('.').pop()!.toUpperCase() : ''}</span>
+                </span>
               </button>;
             })}
           </div>
@@ -154,7 +160,12 @@ export function MobileWorkspace() {
       {panel === 'advanced-film' && <section className="phone-panel phone-advanced" aria-label={tz('Film and paper', '胶片与相纸')}><LeftRail /></section>}
       {panel === 'advanced' && <section className="phone-panel phone-advanced" aria-label={tz('Advanced adjustments', '高级调整')}><RightRail /></section>}
       </div>
-      <nav className="phone-actions" aria-label={tz('Edit photo', '编辑照片')}>
+      {frames.length > 1 && currentIndex >= 0 && !cropping && <nav className="phone-frame-nav" aria-label={tz('Browse photos', '浏览照片')}>
+        <button disabled={opening || currentIndex === 0} onClick={() => openPhoto(frames[currentIndex - 1]!.path)}>{tz('‹ Previous', '‹ 上一张')}</button>
+        <span>{currentIndex + 1} / {frames.length}</span>
+        <button disabled={opening || currentIndex === frames.length - 1} onClick={() => openPhoto(frames[currentIndex + 1]!.path)}>{tz('Next ›', '下一张 ›')}</button>
+      </nav>}
+      <nav className="phone-actions phone-edit-actions" aria-label={tz('Edit photo', '编辑照片')}>
         <button disabled={opening} aria-pressed={panel === 'adjust'} onClick={() => setPanel(panel === 'adjust' ? null : 'adjust')}>{tz('Adjust', '调整')}</button>
         <button disabled={opening} aria-pressed={panel === 'film'} onClick={() => setPanel(panel === 'film' ? null : 'film')}>{tz('Film', '胶片')}</button>
         <button disabled={opening} aria-pressed={original} onClick={() => setOriginal(!original)}>{tz('Original', '原图')}</button>
@@ -178,17 +189,28 @@ export function MobileWorkspace() {
 
 function Adjustments() {
   const grade = useSession(editingAdjustments);
-  return <section className="phone-panel phone-adjust" aria-label={tz('Basic adjustments', '基础调整')}>
-    {adjustments.map(({ key, label, min, max, step }) => <label key={key}>
-      <span>{tz(label[0], label[1])} <output>{grade[key].toFixed(step < 1 ? 2 : 0)}</output></span>
-      <input type="range" min={min} max={max} step={step} value={grade[key]} onPointerDown={beginGesture}
-        onKeyDown={event => {
-          if (!event.repeat && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) beginGesture();
-        }} onChange={event => {
-        const value = Number(event.currentTarget.value);
-        setAdjustments(previous => ({ ...previous, [key]: value }), { coalesce: true });
-      }} />
-    </label>)}
+  const [active, setActive] = useState<(typeof adjustments)[number]['key']>('exposure');
+  return <section className="phone-panel phone-adjust phone-tone" aria-label={tz('Basic adjustments', '基础调整')}>
+    <div className="phone-tone-tabs" role="group" aria-label={tz('Adjustment', '调整项目')}>
+      {adjustments.map(({ key, label }) => <button key={key} aria-pressed={active === key} onClick={() => setActive(key)}>
+        {tz(label[0], label[1])}
+      </button>)}
+    </div>
+    {adjustments.map(({ key, label, min, max, step }) => <div className={'phone-tone-field' + (active === key ? ' active' : '')} key={key}>
+      <label>
+        <span>{tz(label[0], label[1])} <output>{grade[key].toFixed(step < 1 ? 2 : 0)}</output></span>
+        <input type="range" min={min} max={max} step={step} value={grade[key]} onPointerDown={beginGesture}
+          onKeyDown={event => {
+            if (!event.repeat && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) beginGesture();
+          }} onChange={event => {
+            const value = Number(event.currentTarget.value);
+            setAdjustments(previous => ({ ...previous, [key]: value }), { coalesce: true });
+          }} />
+      </label>
+      <button className="phone-tone-reset" disabled={grade[key] === 0}
+        aria-label={tz(`Reset ${label[0].toLowerCase()}`, `重置${label[1]}`)}
+        onClick={() => setAdjustments(previous => ({ ...previous, [key]: 0 }))}>{tz('Reset', '重置')}</button>
+    </div>)}
   </section>;
 }
 

@@ -18,7 +18,7 @@ test('phone import shows tappable photos before editing and restores the library
   await expect(page.locator('.phone-preview canvas')).toBeVisible();
   await expect.poll(() => page.evaluate(() => (window as any).__spk.sessionStore.getState().selection)).toBeTruthy();
   await page.locator('.phone-actions button').first().tap();
-  await expect(page.locator('.phone-adjust input')).toHaveCount(3);
+  await expect(page.locator('.phone-tone-field.active input')).toBeVisible();
   await page.locator('.phone-adjust input').first().fill('0.5');
   await expect(page.locator('.phone-adjust output').first()).toHaveText('0.50');
   await page.evaluate(() => window.dispatchEvent(new Event('spektralab-mobile-back', { cancelable: true })));
@@ -26,7 +26,7 @@ test('phone import shows tappable photos before editing and restores the library
   await page.getByRole('button', { name: 'Film', exact: true }).tap();
   await expect(page.getByLabel('Film stock')).toBeVisible();
   await page.getByRole('button', { name: 'Export', exact: true }).tap();
-  await expect(page.getByLabel('Export format')).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Export format' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Save to folder' })).toBeVisible();
   await page.getByRole('button', { name: '‹ Edit' }).tap();
   await page.locator('.phone-header button').first().tap();
@@ -45,10 +45,10 @@ test('new imports appear first when the existing library spans pages', async ({ 
   await page.goto('/?mobile-workspace');
   const photos = page.getByTestId('phone-photo');
   await expect(photos).toHaveCount(24);
-  await expect(photos.first()).toContainText('roll-0.jpg');
+  await expect(photos.first()).toHaveAccessibleName('roll-0.jpg');
   await page.getByRole('button', { name: 'Import photos', exact: true }).tap();
-  await expect(photos.first()).toContainText('DSC_0001.NEF');
-  await expect(photos.nth(3)).toContainText('roll-0.jpg');
+  await expect(photos.first()).toHaveAccessibleName('DSC_0001.NEF');
+  await expect(photos.nth(3)).toHaveAccessibleName('roll-0.jpg');
   await page.getByRole('button', { name: 'Next page' }).tap();
   await expect(photos).toHaveCount(4);
 });
