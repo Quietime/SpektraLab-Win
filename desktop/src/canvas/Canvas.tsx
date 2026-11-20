@@ -101,7 +101,7 @@ export function computeLayout(
   return { viewport, offset: { x: ox, y: oy }, outSize, out, zoom, fitZoom, display, native };
 }
 
-export function Canvas() {
+export function Canvas({ touchControls = false, showHistogram = true }: { touchControls?: boolean; showHistogram?: boolean } = {}) {
   const { tz } = useI18n();
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -485,9 +485,9 @@ export function Canvas() {
     >
       <canvas ref={canvas} className="canvas-gl" />
       {glError && <div className="canvas-message">{tz('This display cannot draw the picture (WebGL2): ', '此显示无法绘制画面（WebGL2）：') + glError}</div>}
-      {!selection && !glError && <div className="canvas-message">{tz('Open a folder or drop photographs here (Ctrl+O).', '打开文件夹或把照片拖到这里（Ctrl+O）。')}</div>}
+      {!selection && !glError && !touchControls && <div className="canvas-message">{tz('Open a folder or drop photographs here (Ctrl+O).', '打开文件夹或把照片拖到这里（Ctrl+O）。')}</div>}
       {layout && cropping && <CropOverlay layout={layout} geometry={geometry} dpr={size.dpr} />}
-      {layout && cropping && !pair && <div className="crop-reference" style={{ top: 'auto', bottom: 12, pointerEvents: 'none' }}>
+      {layout && cropping && !pair && !touchControls && <div className="crop-reference" style={{ top: 'auto', bottom: 12, pointerEvents: 'none' }}>
         {tz('Ctrl + drag along a horizon or vertical to straighten', '按住 Ctrl 沿水平线或垂直线拖动以拉直')}
       </div>}
       {layout && cropping && straightenLine && <svg data-testid="straighten-line" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
@@ -527,7 +527,7 @@ export function Canvas() {
         </div>
       )}
       <div className="canvas-corner">
-        {histogram && <HistogramOverlay h={histogram} />}
+        {showHistogram && histogram && <HistogramOverlay h={histogram} />}
         {badge && selection && (
           <span className={'tier-badge ' + badge} data-testid="tier-badge" title={badge === 'full' ? tz('The frame at its own resolution', '照片自身分辨率') : tz('Preview resolution — the frame’s own is on its way', '预览分辨率——全尺寸正在渲染')}>
             {badge === 'full' ? 'full' : 'preview'}

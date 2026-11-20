@@ -4,7 +4,7 @@ test.use({ viewport: { width: 360, height: 780 }, isMobile: true, hasTouch: true
 
 test('phone import shows tappable photos before editing and restores the library', async ({ page }) => {
   await page.goto('/?mobile-workspace');
-  const importButton = page.locator('.phone-actions button');
+  const importButton = page.getByRole('button', { name: 'Import photos', exact: true });
   await expect(importButton).toBeEnabled();
   await expect(page.locator('.topbar')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Import photos to get started' })).toBeVisible();

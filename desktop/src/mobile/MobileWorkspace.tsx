@@ -26,11 +26,13 @@ export function MobileWorkspace() {
   const status = useSession(s => s.status);
   const original = useSession(s => s.showingOriginal);
   const tool = useSession(s => s.tool);
+  const pairPlacing = useSession(s => s.pairPlacing);
   const [page, setPage] = useState(0);
   const [screen, setScreen] = useState<'photos' | 'edit'>('photos');
   const [panel, setPanel] = useState<'adjust' | 'film' | 'advanced' | 'advanced-film' | 'more' | null>(null);
   const [busy, setBusy] = useState(false);
   const [opening, setOpening] = useState(false);
+  const [showHistogram, setShowHistogram] = useState(false);
   const [message, setMessage] = useState('');
   const [, refreshThumbs] = useState(0);
   const restored = useRef(false);
@@ -61,11 +63,12 @@ export function MobileWorkspace() {
   useEffect(() => {
     const back = (event: Event) => {
       if (panel) { event.preventDefault(); setPanel(null); }
+      else if (screen === 'edit' && (tool === 'crop' || pairPlacing)) { event.preventDefault(); setTool('hand'); }
       else if (screen === 'edit') { event.preventDefault(); setScreen('photos'); }
     };
     window.addEventListener('spektralab-mobile-back', back);
     return () => window.removeEventListener('spektralab-mobile-back', back);
-  }, [screen, panel]);
+  }, [screen, panel, tool, pairPlacing]);
 
   async function importPhotos() {
     setMessage('');
@@ -100,11 +103,15 @@ export function MobileWorkspace() {
   }
 
   const ready = phase === 'ready';
+  const cropping = screen === 'edit' && (tool === 'crop' || pairPlacing);
+  const showPanel = panel !== null && panel !== 'more';
   return <div className="phone-workspace" data-testid="editor">
     <header className="phone-header">
-      {screen === 'edit' ? <button onClick={() => { setPanel(null); setScreen('photos'); }}>{tz('‹ Photos', '‹ 照片')}</button> : <h1>{tz('Photos', '照片')}</h1>}
+      {screen === 'edit' ? <button onClick={() => { setPanel(null); if (cropping) setTool('hand'); setScreen('photos'); }}>{tz('‹ Photos', '‹ 照片')}</button> : <h1>{tz('Photos', '照片')}</h1>}
       {screen === 'edit' && current && <span className="phone-name">{current.name}</span>}
-      <button onClick={() => setPanel(value => value === 'more' ? null : 'more')} aria-expanded={panel === 'more'}>{tz('More', '更多')}</button>
+      {cropping
+        ? <button className="phone-primary" onClick={() => setTool('hand')}>{tz('Done', '完成')}</button>
+        : <button onClick={() => setPanel(value => value === 'more' ? null : 'more')} aria-expanded={panel === 'more'}>{tz('More', '更多')}</button>}
     </header>
     {(message || error) && <p className="phone-message" role="alert">{message || error}</p>}
     {screen === 'photos' ? <>
@@ -133,14 +140,20 @@ export function MobileWorkspace() {
           </div>}
         </>}
       </section>
-      <footer className="phone-actions"><button className="phone-primary" disabled={!ready || busy} onClick={() => void importPhotos()}>{busy ? tz('Importing…', '正在导入…') : tz('Import photos', '导入照片')}</button></footer>
+      <footer className="phone-actions phone-library-actions">
+        <button data-testid="mobile-lighttable-open" disabled={!ready || busy} onClick={() => { setPanel(null); openLightTable(); }}>{tz('Light table', '看片台')}</button>
+        <button className="phone-primary" disabled={!ready || busy} onClick={() => void importPhotos()}>{busy ? tz('Importing…', '正在导入…') : tz('Import photos', '导入照片')}</button></footer>
     </> : <>
-      <main className="phone-preview"><Canvas /></main>
-      <div className="phone-editor-status" role="status">{opening ? tz('Opening photo…', '正在打开照片…') : status}</div>
+      <div className={'phone-edit-workarea' + (showPanel ? ' with-panel' : '')}>
+        <div className="phone-preview-region">
+          <main className="phone-preview"><Canvas touchControls showHistogram={showHistogram} /></main>
+          <div className="phone-editor-status" role="status">{opening ? tz('Opening photo…', '正在打开照片…') : status}</div>
+        </div>
       {panel === 'adjust' && <Adjustments />}
       {panel === 'film' && <Film /> }
       {panel === 'advanced-film' && <section className="phone-panel phone-advanced" aria-label={tz('Film and paper', '胶片与相纸')}><LeftRail /></section>}
       {panel === 'advanced' && <section className="phone-panel phone-advanced" aria-label={tz('Advanced adjustments', '高级调整')}><RightRail /></section>}
+      </div>
       <nav className="phone-actions" aria-label={tz('Edit photo', '编辑照片')}>
         <button disabled={opening} aria-pressed={panel === 'adjust'} onClick={() => setPanel(panel === 'adjust' ? null : 'adjust')}>{tz('Adjust', '调整')}</button>
         <button disabled={opening} aria-pressed={panel === 'film'} onClick={() => setPanel(panel === 'film' ? null : 'film')}>{tz('Film', '胶片')}</button>
@@ -153,9 +166,10 @@ export function MobileWorkspace() {
         <button onClick={() => { redo(); setPanel(null); }}>{tz('Redo', '重做')}</button>
         <button onClick={() => { setTool(tool === 'crop' ? 'hand' : 'crop'); setPanel(null); }}>{tool === 'crop' ? tz('Finish crop', '完成裁切') : tz('Crop', '裁切')}</button>
         <button onClick={() => { setPanel(null); void renderFullNow(); }}>{tz('Render at full size', '全尺寸渲染')}</button>
+        <button aria-pressed={showHistogram} onClick={() => { setShowHistogram(value => !value); setPanel(null); }}>{tz('Histogram', '直方图')}</button>
         <button onClick={() => setPanel('advanced')}>{tz('Advanced adjustments', '高级调整')}</button>
         <button onClick={() => setPanel('advanced-film')}>{tz('Advanced film settings', '高级胶片设置')}</button></>}
-      <button data-testid="mobile-lighttable-open" onClick={() => { setPanel(null); openLightTable(); }}>{tz('Light table', '看片台')}</button>
+      {screen === 'edit' && <button data-testid="mobile-lighttable-open" onClick={() => { setPanel(null); openLightTable(); }}>{tz('Light table', '看片台')}</button>}
       <button onClick={() => { setPanel(null); setPages({ settingsOpen: true }); }}>{tz('Settings', '设置')}</button>
     </section>}
     <HostFailure />
