@@ -4,7 +4,7 @@
 
 **当前为开发中的源码快照，版本 `1.3.3-lighttable.3` / build `13304`，尚未发布通过完整验收的安装包。源码推送不表示测试已全部通过。**
 
-Android 13308 支持独立照片页、单张编辑和系统文件夹导出。照片页可直接打开看片台，裁切有「完成」按钮，平板横屏在照片右侧显示调整工具。安装包沿用原签名和包名。Web 触控与布局测试已通过，Android 实机结果待确认。[手机版 APK](https://raw.githubusercontent.com/Quietime/SpektraLab-Win/50581365552fe348d07471951d671212cd4d0789/SpektraLab-Android-Phone.apk) · [平板版 APK](https://raw.githubusercontent.com/Quietime/SpektraLab-Win/50581365552fe348d07471951d671212cd4d0789/SpektraLab-Android-Tablet.apk)
+Android 13309 重绘了照片页、编辑页和导出页。手机使用可翻看的照片卡片和分段调节，平板横屏使用右侧调整栏。新版沿用原包名和签名，可覆盖安装。浏览器触控与布局检查通过，Android 实机结果待确认。[手机版 APK](https://raw.githubusercontent.com/Quietime/SpektraLab-Win/e4f1bf7c73b480aeed0a9bbfe146228492f1a7a2/SpektraLab-Android-Phone.apk) · [平板版 APK](https://raw.githubusercontent.com/Quietime/SpektraLab-Win/e4f1bf7c73b480aeed0a9bbfe146228492f1a7a2/SpektraLab-Android-Tablet.apk)
 
 ## 当前状态（2026-11-17）
 
