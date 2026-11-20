@@ -383,9 +383,11 @@ input {
   gap: 10px;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 0 6px;
+  padding: 6px 6px 0;
   height: 100%;
-  align-items: center;
+  /* Top-aligned so the file name under each cell stays inside the strip;
+     centred cells pushed it below the strip's clipped edge. */
+  align-items: flex-start;
   scrollbar-width: thin;
 }
 .thumb {

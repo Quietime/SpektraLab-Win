@@ -16,7 +16,7 @@ test('phone import shows tappable photos before editing and restores the library
   expect(bounds?.width).toBeGreaterThan(100);
   await photos.nth(1).tap();
   await expect(page.locator('.phone-preview canvas')).toBeVisible();
-  await expect.poll(() => page.evaluate(() => (window as any).__spk.sessionStore.getState().selection)).toBeTruthy();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __spk: { sessionStore: { getState(): { selection: unknown } } } }).__spk.sessionStore.getState().selection)).toBeTruthy();
   await page.locator('.phone-actions button').first().tap();
   await expect(page.locator('.phone-tone-field.active input')).toBeVisible();
   await page.locator('.phone-adjust input').first().fill('0.5');

@@ -214,7 +214,7 @@ html[data-mobile] .menu-item { min-height: 44px; }
 
 @media (min-width: 720px) and (orientation: landscape) {
   .phone-library { padding: 20px; }
-  .phone-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; }
+  .phone-grid { grid-template-columns: repeat(auto-fill, minmax(228px, 1fr)); gap: 16px; }
   .phone-edit-workarea.with-panel {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(288px, 29%);
