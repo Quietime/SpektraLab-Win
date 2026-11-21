@@ -214,7 +214,7 @@ function FilmSection() {
         },
       ]}
     >
-      <StockList rows={rows} selected={film} onSelect={selectFilmStock} testId="film-list" />
+      <StockList rows={rows} selected={film} onSelect={selectFilmStock} testId="film-list" label={t('sectionFilm')} />
     </Section>
   );
 }
@@ -359,6 +359,7 @@ function PrintSection() {
         rows={rows}
         selected={selected}
         testId="paper-list"
+        label={t('sectionPrint')}
         onSelect={(id) => {
           if (id === POSITIVE_ID) setParams((q) => ({ ...q, scanFilm: true, digitalIntermediate: false }));
           else if (id === DIGITAL_ID) setParams((q) => ({ ...q, scanFilm: false, digitalIntermediate: true }));

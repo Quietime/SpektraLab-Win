@@ -51,7 +51,7 @@ export function Filmstrip() {
       <button className="strip-chevron" onClick={() => selectRelative(-1)} disabled={batch} aria-label="Previous">
         <ChevronLeft />
       </button>
-      <div className="filmstrip-cells" ref={strip}
+      <div className="filmstrip-cells" ref={strip} tabIndex={0} role="group" aria-label={tz('Filmstrip', '胶片条')}
         onPointerMove={e => {
           const d = drag.current;
           if (!d || batch) return;

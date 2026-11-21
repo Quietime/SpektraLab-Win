@@ -15,7 +15,8 @@
   --rule: #3a3b39;
   --rule-region: #1a1a19;
   --text: #f9f7f3;
-  --dim: #898989;
+  /* 4.7:1 on --card (WCAG 1.4.3 AA); #898989 measured 3.9:1. */
+  --dim: #979797;
   --secondary-text: #dad8d4;
   --plot: #1e1f1e;
   --plot-grid: #3a3b39;
@@ -383,9 +384,11 @@ input {
   gap: 10px;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 0 6px;
+  padding: 6px 6px 0;
   height: 100%;
-  align-items: center;
+  /* Top-aligned so the file name under each cell stays inside the strip;
+     centred cells pushed it below the strip's clipped edge. */
+  align-items: flex-start;
   scrollbar-width: thin;
 }
 .thumb {

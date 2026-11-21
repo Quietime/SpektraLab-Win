@@ -422,7 +422,7 @@ export function LightTable() {
       <button className="lt-close" data-testid="lt-close" aria-label={tz('Close light table', '关闭灯箱')} title={tz('Close light table (Esc)', '关闭灯箱（Esc）')} onClick={back}>×</button>
       <strong>{tz('Light table', '灯箱')}</strong>
       <div className="lt-trays" role="tablist" aria-label={tz('Trays', '底片盘')}>
-        {tableDocument.trays.map((tray) => <button type="button" role="tab" data-testid="lt-tray" key={tray.id} aria-selected={tray.id === active?.id} aria-pressed={tray.id === active?.id} onClick={() => changeTable((doc) => ({ ...doc, active: tray.id }))}>{tray.name}</button>)}
+        {tableDocument.trays.map((tray) => <button type="button" role="tab" data-testid="lt-tray" key={tray.id} aria-selected={tray.id === active?.id} onClick={() => changeTable((doc) => ({ ...doc, active: tray.id }))}>{tray.name}</button>)}
       </div>
       <button className="btn" data-testid="lt-new-tray" disabled={!ready || tableDocument.trays.length >= MAX_TRAYS} onClick={newTray}>+ {tz('Tray', '底片盘')}</button>
       <button className="btn" data-testid="lt-add-photos" disabled={!ready} onClick={() => void importPhotos()}><Import /> {tz('Add photos', '添加照片')}</button>
@@ -451,7 +451,7 @@ export function LightTable() {
             <LightPhoto path={card.path} selected={card.path === selection} />
             <button className="lt-card-remove" data-testid="lt-remove-card" aria-label={tz('Return photo to tray', '将照片放回底片盘')} title={tz('Return to tray', '放回底片盘')} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); changeTray((tray) => returnCard(tray, card.path)); }}>{'×'}</button>
           </article>)}
-          {!stageCards.length && <div className="lt-stage-empty">{tz('Drag photos here or add them from the tray below.', '将照片拖到此处，或从下方底片盘添加。')}</div>}
+          {!stageCards.length && <div className="lt-stage-empty">{tz('Drag photos here or add them from the tray.', '将照片拖到此处，或从底片盘添加。')}</div>}
           {loupeAt && loupePath && <div className="lt-loupe" style={{ left: loupeAt.x - (stage.current?.getBoundingClientRect().left ?? 0), top: loupeAt.y - (stage.current?.getBoundingClientRect().top ?? 0), ['--loupe-scale' as string]: loupe }} aria-hidden="true"><LightPhoto path={loupePath} selected={loupePath === selection} label={false} highDetail /></div>}
         </div>
         <div className="lt-stage-footer"><span>{active.name} · {currentCards.length}/{MAX_CARDS} {tz('on table', '已摆放')} · {pendingPhotos.length}/{MAX_PHOTOS} {tz('in tray', '待摆放')}</span><input aria-label={tz('Tray name', '底片盘名称')} value={active.name} maxLength={80} onChange={(e) => changeTray((tray) => rename(tray, e.currentTarget.value))} /></div>
