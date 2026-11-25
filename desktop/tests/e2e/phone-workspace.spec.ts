@@ -52,3 +52,24 @@ test('new imports appear first when the existing library spans pages', async ({ 
   await page.getByRole('button', { name: 'Next page' }).tap();
   await expect(photos).toHaveCount(4);
 });
+
+test('film cards choose a stock by tap or keyboard and keep paper compatible', async ({ page }) => {
+  await page.goto('/?mobile-workspace');
+  await page.getByRole('button', { name: 'Import photos', exact: true }).tap();
+  await page.getByTestId('phone-photo').first().tap();
+  await expect(page.locator('.phone-preview canvas')).toBeVisible();
+  await page.getByRole('button', { name: 'Film', exact: true }).tap();
+  const films = page.getByRole('radiogroup', { name: 'Film stock' });
+  await expect(films.getByRole('radio', { checked: true })).toHaveCount(1);
+  const card = films.locator('[data-stock="kodak_tri_x_400"]');
+  const box = await card.boundingBox();
+  expect(box?.height).toBeGreaterThanOrEqual(48);
+  await card.tap();
+  await expect(card).toHaveAttribute('aria-checked', 'true');
+  const params = () => page.evaluate(() => (window as unknown as { __spk: { sessionStore: { getState(): { sidecar: { params: { filmStock: string; printStock: string } } } } } }).__spk.sessionStore.getState().sidecar.params);
+  await expect.poll(async () => (await params()).printStock).toBe('ilford_multigrade_iv_rc');
+  await card.focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(async () => (await params()).filmStock).not.toBe('kodak_tri_x_400');
+  await expect(films.getByRole('radio', { checked: true })).toBeFocused();
+});

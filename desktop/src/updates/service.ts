@@ -3,6 +3,7 @@ import { androidCall, inAndroid } from '../mobile/bridge';
 import { inTauri } from '../host/transport';
 import { flushFrameOrder, flushPairChanges, flushSave, sessionStore } from '../state/session';
 import { loadTable, saveTable, tableStore } from '../lighttable/model';
+import { tz } from '../i18n';
 
 export interface UpdateStatus {
   channel?: 'windows-x64' | 'android-phone-arm64' | 'android-tablet-arm64' | string;
@@ -46,7 +47,7 @@ function serializeUpdateOperation<T>(operation: () => Promise<T>): Promise<T> {
 export const canUseNativeUpdates = () => inAndroid() || inTauri();
 
 async function callNative(method: 'check_updates' | 'update_prepare' | 'update_install'): Promise<UpdateStatus> {
-  if (!canUseNativeUpdates()) throw new Error('Managed updates are available in the installed app.');
+  if (!canUseNativeUpdates()) throw new Error(tz('Managed updates are available in the installed app.', '自动更新仅在已安装的应用中可用。'));
   if (inAndroid()) return androidCall<UpdateStatus>(method);
   return invoke<UpdateStatus>(method);
 }

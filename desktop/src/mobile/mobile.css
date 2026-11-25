@@ -213,6 +213,60 @@ html[data-mobile] .menu-item { min-height: 44px; }
 .phone-export-option input { margin: 0 10px 0 0; width: 18px; height: 18px; accent-color: var(--mobile-accent); }
 .phone-export-option input:checked + span { color: var(--mobile-accent); font-weight: 650; }
 
+/* Film cards: a horizontal roll on a phone, a three-column grid in
+   the tablet's side panel. Covers where the catalogue has one; otherwise the
+   film's kind on a tile tinted by it. */
+.phone-film-heading { display: flex; gap: 8px; align-items: baseline; padding-bottom: 8px; font-weight: 650; }
+.phone-film-heading span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--mobile-accent); font-weight: 600; }
+.phone-film-strip {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  padding-bottom: 10px;
+  margin-bottom: 4px;
+}
+.phone-film-group { display: flex; gap: 8px; flex: none; position: relative; padding-top: 18px; }
+.phone-film-group-name { position: absolute; top: 0; left: 2px; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--mobile-muted); }
+.phone-workspace .phone-film-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  width: 92px;
+  flex: none;
+  padding: 6px;
+  text-align: left;
+  scroll-snap-align: start;
+  background: var(--mobile-surface);
+}
+.phone-workspace .phone-film-card[aria-checked=true] {
+  border-color: var(--mobile-accent);
+  box-shadow: inset 0 0 0 1px var(--mobile-accent);
+}
+.phone-film-cover {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border-radius: 7px;
+  overflow: hidden;
+  background: #3a352f;
+}
+.phone-film-card[data-kind=positive] .phone-film-cover { background: #3d3f52; }
+.phone-film-card[data-kind=mono] .phone-film-cover { background: #424242; }
+.phone-film-cover img { width: 100%; height: 100%; object-fit: cover; }
+.phone-film-cover > span { font-size: 12px; font-weight: 700; letter-spacing: .06em; color: #f8f2e9; }
+.phone-film-name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.5em;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
 @media (min-width: 720px) and (orientation: landscape) {
   .phone-library { padding: 20px; }
   .phone-grid { grid-template-columns: repeat(auto-fill, minmax(228px, 1fr)); gap: 16px; }
@@ -240,6 +294,9 @@ html[data-mobile] .menu-item { min-height: 44px; }
     border-top: 0;
   }
   .phone-edit-footer .phone-actions { flex: 1; min-width: 0; border-top: 0; }
+  .phone-film-strip { display: block; overflow: visible; }
+  .phone-film-group { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding-top: 22px; margin-bottom: 10px; }
+  .phone-workspace .phone-film-card { width: auto; }
   .phone-tone-tabs { display: none; }
   .phone-tone-field, .phone-tone-field.active {
     display: grid;

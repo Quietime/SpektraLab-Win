@@ -103,7 +103,7 @@ export function SettingsDialog() {
       <div className="tabs">
         {(['general', 'rendering', 'storage', 'diagnostics', 'agents'] as const).map((p) => (
           <button key={p} className={page === p ? 'on' : ''} onClick={() => set('settingsPage', p)}>
-            {p === 'general' ? t('setTabGeneral') : p === 'rendering' ? t('setTabRendering') : p==='storage'?tz('Memory & cache','内存与缓存'):p==='agents'?'Agents':t('setTabDiagnostics')}
+            {p === 'general' ? t('setTabGeneral') : p === 'rendering' ? t('setTabRendering') : p==='storage'?tz('Memory & cache','内存与缓存'):p==='agents'?t('setTabAgents'):t('setTabDiagnostics')}
           </button>
         ))}
       </div>
@@ -152,7 +152,7 @@ export function SettingsDialog() {
                 {updates.ready&&updates.installation_pending&&<div className="caption">{tz('Installation is waiting for Android system confirmation. Return here if you cancel to try again.','正在等待 Android 系统确认安装。若取消，请返回此处重试。')}</div>}
                 {updates.ready&&!updates.installation_pending&&<button className="btn primary" disabled={updateAction!=='idle'||batchExporting} onClick={()=>void installUpdates()}>{updateAction==='installing'?tz('Saving and installing…','正在保存并安装…'):tz('Install update','安装更新')}</button>}
               </>}
-              {updates.error&&<div className="caption">{updates.error}</div>}
+              {updates.error&&<div className="caption">{tz('Update error: ','更新出错：')}{updates.error}</div>}
               {!canUseNativeUpdates()&&<div className="caption">{tz('Managed updates are available in the installed app.','托管更新仅在已安装的应用中提供。')}</div>}
               <div className="caption">{tz('Updates are checked automatically in the background. Installation starts only when you choose Install update.','应用会在后台自动检查更新；只有选择“安装更新”后才会开始安装。')}</div>
             </div>
