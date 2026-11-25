@@ -530,7 +530,7 @@ export function Canvas({ touchControls = false, showHistogram = true }: { touchC
         {showHistogram && histogram && <HistogramOverlay h={histogram} />}
         {badge && selection && (
           <span className={'tier-badge ' + badge} data-testid="tier-badge" title={badge === 'full' ? tz('The frame at its own resolution', '照片自身分辨率') : tz('Preview resolution — the frame’s own is on its way', '预览分辨率——全尺寸正在渲染')}>
-            {badge === 'full' ? 'full' : 'preview'}
+            {badge === 'full' ? tz('full', '全尺寸') : tz('preview', '预览')}
           </span>
         )}
       </div>

@@ -48,7 +48,7 @@ export function Filmstrip() {
   }, [selection]);
   return (
     <div className="filmstrip" data-testid="filmstrip">
-      <button className="strip-chevron" onClick={() => selectRelative(-1)} disabled={batch} aria-label="Previous">
+      <button className="strip-chevron" onClick={() => selectRelative(-1)} disabled={batch} aria-label={tz('Previous', '上一张')}>
         <ChevronLeft />
       </button>
       <div className="filmstrip-cells" ref={strip} tabIndex={0} role="group" aria-label={tz('Filmstrip', '胶片条')}
@@ -94,7 +94,7 @@ export function Filmstrip() {
           </div>
         ))}
       </div>
-      <button className="strip-chevron" onClick={() => selectRelative(1)} disabled={batch} aria-label="Next">
+      <button className="strip-chevron" onClick={() => selectRelative(1)} disabled={batch} aria-label={tz('Next', '下一张')}>
         <ChevronRight />
       </button>
       {pairAllowed&&<button className="btn" style={{margin:6,flexShrink:0}} disabled={batch} title={tz('Create a pair from up to two selected photographs.','将选中的最多两张照片组合为半格配对。')} data-testid="create-pair" onClick={()=>void createPair()}>{tz('Pair','半格配对')}</button>}

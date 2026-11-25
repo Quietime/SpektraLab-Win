@@ -26,6 +26,12 @@ import {ADJUSTMENTS_DEFAULT,PROPHOTO_MID_GREY}from '@shared/adjustments';
 import { frameImages } from '../state/frames';
 import { printGeometry } from '@shared/filmFrame';
 
+// The built-in DI recipe keeps its stored English name; show it translated
+// until the person renames it. Format and colour-space names stay English.
+const recipeName = (r: { id: string; name: string }) => r.id === 'di' && r.name === 'Digital Intermediate' ? tz('Digital Intermediate', '数字中间片') : r.name;
+const COLOUR_SPACE_NAMES: Record<string, string> = { sRGB: 'sRGB', srgb: 'sRGB', 'display-p3': 'Display P3', prophoto: 'ProPhoto RGB', 'adobe-rgb': 'Adobe RGB (1998)', rec2020: 'Rec. 2020' };
+const colourSpaceName = (id: string) => COLOUR_SPACE_NAMES[id] ?? id;
+
 const TOKEN_LABEL: Record<NameToken, () => string> = {
   originalName: () => tz('Org. Name', '原文件名'),
   filmStock: () => tz('Film', '胶片'),
@@ -217,7 +223,7 @@ export function ExportPage({ mobile = false }: { mobile?: boolean } = {}) {
           <legend>{tz('Export format', '导出格式')}</legend>
           {recipes.map((recipe, index) => <label className="phone-export-option" key={recipe.id}>
             <input type="radio" name="phone-export-format" checked={index === current} onChange={() => setCurrent(index)} />
-            <span>{recipe.name}</span>
+            <span>{recipeName(recipe)}</span>
           </label>)}
         </fieldset>
         {folderError && <p role="alert">{folderError}</p>}
@@ -285,7 +291,7 @@ export function ExportPage({ mobile = false }: { mobile?: boolean } = {}) {
               <div className="recipe-list">
                 {recipes.map((x, i) => (
                   <div key={x.id} className={'stock-row' + (i === current ? ' selected' : '')} onClick={() => setCurrent(i)}>
-                    <span className="name">{x.name}</span>
+                    <span className="name">{recipeName(x)}</span>
                   </div>
                 ))}
               </div>
@@ -376,7 +382,7 @@ export function ExportPage({ mobile = false }: { mobile?: boolean } = {}) {
                     { value: 'jpeg', label: 'JPEG' },
                     { value: 'png', label: 'PNG' },
                     { value: 'tiff', label: 'TIFF' },
-                    { value: 'di', label: 'Digital Intermediate', disabled: !sessionStore.getState().gate.digitalIntermediate },
+                    { value: 'di', label: tz('Digital Intermediate', '数字中间片'), disabled: !sessionStore.getState().gate.digitalIntermediate },
                   ]}
                   onChange={(v) => edit({ format: v, bitDepth: v === 'di' ? 16 : v === 'jpeg' ? 8 : r.bitDepth })}
                 />
@@ -453,7 +459,7 @@ export function ExportPage({ mobile = false }: { mobile?: boolean } = {}) {
           </button>)}
         </main>:<main className="export-proof" style={{flexDirection:'column'}}>
           <canvas ref={proof} data-testid="export-proof" />
-          <div className="caption">{proofError?tz('Soft proof failed: ','软打样失败：')+proofError:proofBusy?tz('Preparing soft proof…','正在准备软打样…'):r.format==='di'?tz('Original DI view','原版 DI 视图'):r.colorSpace}</div>
+          <div className="caption">{proofError?tz('Soft proof failed: ','软打样失败：')+proofError:proofBusy?tz('Preparing soft proof…','正在准备软打样…'):r.format==='di'?tz('Original DI view','原版 DI 视图'):colourSpaceName(r.colorSpace)}</div>
         </main>}
         {mode!=='grid'&&<aside className="export-strip">
           {frames.map((p) => (

@@ -22,6 +22,7 @@ import type { StockCatalog } from '@shared/stocks';
 import { host } from '../host/client';
 import { baseName, dirName, joinPath, platform } from '../platform';
 import { type ExportRecipe, extensionOf, hostFormat, resolveTarget, stem, stockToken } from './recipes';
+import { tz } from '../i18n';
 
 export interface FrameToExport {
   path: string;
@@ -122,14 +123,14 @@ export function outputFor(r: ExportRecipe, g: Geometry, native: { width: number;
 
 export async function exportFrame(r: ExportRecipe, f: FrameToExport, catalog: StockCatalog, methods: readonly string[] | undefined,exactPath?:string): Promise<ExportOutcome> {
   try {
-    if(f.pairComplete===false) throw new Error('Both half-frame holes need available photographs before export.');
+    if(f.pairComplete===false) throw new Error(tz('Both half-frame holes need available photographs before export.', '两个半格都需要有可用的照片才能导出。'));
     const geometry = printGeometry(f.params, f.geometry);
     const { dir, base } = await targetFor(r, f, catalog);
     await platform().ensureDir(exactPath?dirName(exactPath):dir);
     const target = exactPath?{path:exactPath,overwrite:true}:await resolveTarget(dir, base, extensionOf(r), r.existing, (p) => platform().pathExists(p), joinPath);
     if (!target) return { kind: 'skipped', path: joinPath(dir, `${base}.${extensionOf(r)}`) };
     if (r.format === 'di') {
-      if (!methods?.includes('export_cineon')) throw new Error('This host cannot export a raw Cineon Digital Intermediate.');
+      if (!methods?.includes('export_cineon')) throw new Error(tz('This host cannot export a raw Cineon Digital Intermediate.', '当前引擎无法导出原始 Cineon 数字中间片。'));
       const negativeGeometry = hasFilmFrame(f.params) ? engineGeometry(f.params, f.geometry, f.native) : wireGeometry(f.geometry);
       const res = await host().exportCineon(f.session, target.path, negativeGeometry, target.overwrite);
       return { kind: 'written', path: res.path, width: res.width, height: res.height, carriesEdits: false };
@@ -144,7 +145,7 @@ export async function exportFrame(r: ExportRecipe, f: FrameToExport, catalog: St
         { timeoutMs: 1_800_000 },
       );
       const info = rr.result.image as { width: number; height: number; row_bytes: number };
-      if (rr.payload.byteLength !== info.width * info.height * 8) throw new Error('The full-resolution export payload is incomplete.');
+      if (rr.payload.byteLength !== info.width * info.height * 8) throw new Error(tz('The full-resolution export payload is incomplete.', '全尺寸导出数据不完整。'));
       platform().log('info', `export: received ${info.width}x${info.height} rgba16; applying framing and Post-Dev`);
       const src = rr.payload.byteOffset % 2 === 0
         ? new Uint16Array(rr.payload.buffer, rr.payload.byteOffset, info.width * info.height * 4)
@@ -153,7 +154,7 @@ export async function exportFrame(r: ExportRecipe, f: FrameToExport, catalog: St
       const midGrey = display === 'prophoto' ? PROPHOTO_MID_GREY : SRGB_MID_GREY;
       let presented=src,pregraded=false;
       if(f.pairDocument&&pairHasPresentation(f.pairDocument,f.params,f.adjustments)) {
-        if(!methods?.includes('render_layer')||!f.pairInfo)throw new Error('This host cannot export per-hole print/grade layers');
+        if(!methods?.includes('render_layer')||!f.pairInfo)throw new Error(tz('This host cannot export per-hole print/grade layers', '当前引擎无法按半格导出印放与调色图层'));
         const size={width:info.width,height:info.height};
         const grade=(data:Uint16Array,a:Adjustments)=>!a.enabled||isNeutral(a)?data:filePixels(data,size,GEOMETRY_DEFAULT,a,size,midGrey);
         const rects=presentationRects(hasFilmFrame(f.params)?(await host().transport.request('overscan_geometry',{session:f.session})).result as unknown as FrameLayout:null,f.pairInfo.rects);
