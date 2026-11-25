@@ -221,21 +221,54 @@ function Film() {
   const film = useSession(s => s.sidecar.params.filmStock);
   const paper = useSession(s => s.sidecar.params.printStock);
   const positive = catalog.isPositive(film);
-  // Grouped like the desktop lists, so Android's native picker shows the
-  // same Positive / Negative / Black & White and Still / Cine sections.
+  const strip = useRef<HTMLDivElement>(null);
+  // Grouped like the desktop lists. Films are cards (cover where the
+  // catalogue has one) so a roll can be chosen by eye; papers stay a native
+  // picker because there are few and they follow the film.
   const filmGroups = catalog.filmGroups().filter(group => group.films.length);
+  const films = filmGroups.flatMap(group => group.films);
   const paperGroups = catalog.paperGroups()
     .map(group => ({ ...group, papers: group.papers.filter(stock => catalog.canPrint(film, stock.id)) }))
     .filter(group => group.papers.length);
   const filmGroupName = (title: string) => title === 'Positive' ? tz('Positive', '正片') : title === 'Black & White' ? tz('Black & White', '黑白') : tz('Negative', '负片');
-  return <section className="phone-panel phone-adjust" aria-label={tz('Film and paper', '胶片与相纸')}>
-    <label>{tz('Film stock', '胶片型号')}
-      <select value={film} onChange={event => selectFilmStock(event.currentTarget.value)}>
-        {filmGroups.map(group => <optgroup key={group.title} label={filmGroupName(group.title)}>
-          {group.films.map(stock => <option key={stock.id} value={stock.id}>{stock.name}</option>)}
-        </optgroup>)}
-      </select>
-    </label>
+  const badge = (stock: (typeof films)[number]) => stock.use === 'cine' ? 'CINE' : stock.type === 'positive' ? tz('SLIDE', '反转') : stock.monochrome ? tz('B&W', '黑白') : tz('NEG', '负片');
+  useEffect(() => {
+    strip.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, [film]);
+  const move = (delta: number) => {
+    const at = films.findIndex(stock => stock.id === film);
+    const next = films[Math.min(films.length - 1, Math.max(0, at + delta))];
+    if (next && next.id !== film) {
+      selectFilmStock(next.id);
+      requestAnimationFrame(() => strip.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus());
+    }
+  };
+  return <section className="phone-panel phone-adjust phone-film" aria-label={tz('Film and paper', '胶片与相纸')}>
+    <div className="phone-film-heading">{tz('Film stock', '胶片型号')} <span>{catalog.stock(film)?.name ?? ''}</span></div>
+    <div className="phone-film-strip" role="radiogroup" aria-label={tz('Film stock', '胶片型号')} ref={strip}
+      onKeyDown={event => {
+        const delta = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 0;
+        if (!delta) return;
+        event.preventDefault();
+        event.stopPropagation();
+        move(delta);
+      }}>
+      {filmGroups.map(group => <div className="phone-film-group" role="presentation" key={group.title}>
+        <span className="phone-film-group-name" aria-hidden="true">{filmGroupName(group.title)}</span>
+        {group.films.map(stock => {
+          const cover = catalog.coverURL(stock.id);
+          const checked = stock.id === film;
+          return <button key={stock.id} type="button" role="radio" aria-checked={checked} tabIndex={checked ? 0 : -1}
+            className="phone-film-card" data-stock={stock.id} data-kind={stock.monochrome ? 'mono' : stock.type === 'positive' ? 'positive' : 'negative'}
+            onClick={() => selectFilmStock(stock.id)}>
+            <span className="phone-film-cover" aria-hidden="true">
+              {cover ? <img src={cover} alt="" loading="lazy" /> : <span>{badge(stock)}</span>}
+            </span>
+            <span className="phone-film-name">{stock.name}</span>
+          </button>;
+        })}
+      </div>)}
+    </div>
     {!positive && <label>{tz('Print paper', '相纸')}
       <select value={paper} onChange={event => selectPrintStock(event.currentTarget.value)}>
         {paperGroups.map(group => <optgroup key={group.title} label={group.title === 'Cine' ? tz('Cine', '电影') : tz('Still', '照片')}>

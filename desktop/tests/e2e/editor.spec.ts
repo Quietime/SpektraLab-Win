@@ -405,3 +405,10 @@ test('film and paper lists are named and keyboard-operable without stepping fram
   await expect.poll(()=>state(page,'s.sidecar.params.filmStock')).toBe(before);
   expect(await state(page,'s.selection')).toBe(frame);
 });
+
+test('export recipe text fields are labelled',async({page})=>{
+  await openRoll(page);
+  await page.evaluate(()=>(window as unknown as {__spk:{sessionStore:{setState(s:object):void}}}).__spk.sessionStore.setState({exportOpen:true}));
+  await expect(page.getByRole('textbox',{name:'Recipe name'})).toBeVisible();
+  await expect(page.getByRole('textbox',{name:'Subfolder'})).toBeVisible();
+});

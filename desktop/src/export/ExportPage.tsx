@@ -299,7 +299,7 @@ export function ExportPage({ mobile = false }: { mobile?: boolean } = {}) {
               </div>
               <div className="row">
                 <span className="row-label">{tz('Name', '名称')}</span>
-                <input className="unit-field" style={{ flex: 1, textAlign: 'left', padding: '0 6px' }} value={r.name} onChange={(e) => edit({ name: e.target.value })} />
+                <input className="unit-field" aria-label={tz('Recipe name', '方案名称')} style={{ flex: 1, textAlign: 'left', padding: '0 6px' }} value={r.name} onChange={(e) => edit({ name: e.target.value })} />
               </div>
             </Section>
             <Section id="exp-location" title={tz('Location', '位置')}>
@@ -323,7 +323,7 @@ export function ExportPage({ mobile = false }: { mobile?: boolean } = {}) {
               </div>
               <div className="row">
                 <span className="row-label">{tz('Subfolder', '子文件夹')}</span>
-                <input className="unit-field" style={{ flex: 1, textAlign: 'left', padding: '0 6px' }} value={r.subfolder} onChange={(e) => edit({ subfolder: e.target.value.replace(/[\\/:]/g, '-') })} />
+                <input className="unit-field" aria-label={tz('Subfolder', '子文件夹')} style={{ flex: 1, textAlign: 'left', padding: '0 6px' }} value={r.subfolder} onChange={(e) => edit({ subfolder: e.target.value.replace(/[\\/:]/g, '-') })} />
               </div>
               <PillMenu
                 label={tz('Existing File', '已有文件')}
