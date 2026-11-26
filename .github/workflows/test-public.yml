@@ -1,0 +1,25 @@
+name: Test public Windows installer
+on:
+  push:
+    branches: [test-release-20eb5f9]
+permissions:
+  contents: read
+jobs:
+  installed:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Install verified public binary and inspect its running WebView
+        shell: pwsh
+        run: |
+          $url = 'https://github.com/Quietime/SpektraLab-Win/releases/download/v1.3.3-win-20eb5f9/SpektraLab_1.3.3_x64-setup.exe'
+          Invoke-WebRequest $url -OutFile setup.exe
+          if ((Get-FileHash setup.exe).Hash -ne '345f7a4f84e4cc94e1376ac63d7bb1d17d7dd7f264b6f8c6b6c4443cd1b6a02a') { throw 'Installer hash mismatch' }
+          $dir = Join-Path $env:RUNNER_TEMP SpektraTest
+          $installer = Start-Process .\setup.exe -ArgumentList "/S /D=$dir" -Wait -PassThru
+          if ($installer.ExitCode) { throw "Installer exit $($installer.ExitCode)" }
+          Get-ChildItem $dir
+          $app = Get-ChildItem $dir -Filter *.exe | Where-Object Name -NotMatch 'uninstall|host' | Select-Object -First 1
+          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9222'
+          Start-Process $app.FullName
+          node -e "const delay=ms=>new Promise(r=>setTimeout(r,ms));(async()=>{for(let i=0;i<60;i++){await delay(1000);const pages=await fetch('http://localhost:9222/json/list').then(r=>r.json()).catch(()=>[]);const p=pages.find(p=>p.type==='page');if(!p)continue;const ws=new WebSocket(p.webSocketDebuggerUrl);await new Promise(r=>ws.onopen=r);const res=new Promise(r=>ws.onmessage=e=>r(JSON.parse(e.data)));ws.send(JSON.stringify({id:1,method:'Runtime.evaluate',params:{expression:'document.body.innerText',returnByValue:true}}));const msg=await res;ws.close();const t=msg.result?.result?.value||'';if(!t.trim())continue;console.log(p.url,t.slice(0,3500));if(!/tauri.localhost/.test(p.url)||/ERR_CONNECTION_REFUSED|engine failed|engine could not|engine unavailable|could not start|cannot start/i.test(t))process.exit(1);if(/import|film/i.test(t))process.exit(0)}process.exit(2)})()"
