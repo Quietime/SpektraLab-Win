@@ -1,0 +1,30 @@
+name: Attach verified Windows CI build to release draft
+on:
+  push:
+    branches: [release-upload-20eb5f9]
+permissions:
+  actions: read
+  contents: write
+jobs:
+  attach:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check draft and CI provenance
+        shell: bash
+        run: |
+          sha=20eb5f94c61431c03bae3e44c2c61cb586cabb74
+          test "$(gh run view 45665803755 --repo "$GITHUB_REPOSITORY" --json headSha,conclusion --jq '[.headSha,.conclusion]|join(" ")')" = "$sha success"
+          test "$(gh release view v1.3.3-win-20eb5f9 --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,targetCommitish --jq '[.isDraft,.isPrerelease,.targetCommitish]|map(tostring)|join(" ")')" = "true true $sha"
+      - name: Download and attach exact installer
+        shell: bash
+        run: |
+          pkg="$RUNNER_TEMP/release-assets"
+          gh run download 45665803755 --repo "$GITHUB_REPOSITORY" --name spektralab-windows-x64 --dir "$pkg"
+          cd "$pkg"
+          installer=SpektraLab_1.3.3_x64-setup.exe
+          printf '%s  %s\n' 345f7a4f84e4cc94e1376ac63d7bb1d17d7dd7f264b6f8c6b6c4443cd1b6a02a "$installer" > SHA256SUMS.txt
+          sha256sum --check SHA256SUMS.txt
+          gh release upload v1.3.3-win-20eb5f9 --repo "$GITHUB_REPOSITORY" "$installer" SHA256SUMS.txt
