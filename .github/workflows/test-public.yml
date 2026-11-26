@@ -9,6 +9,52 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
+      - name: Configure pinned portable software Vulkan for this CI job
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Hosted runners have no physical Vulkan device. This portable ICD
+          # is used only for validation, with one owned registry entry removed afterward.
+          $archive = Join-Path $env:RUNNER_TEMP 'mesa3d-26.2.6-release-msvc.7z'
+          Invoke-WebRequest 'https://github.com/pal1000/mesa-dist-win/releases/download/26.2.6/mesa3d-26.2.6-release-msvc.7z' -OutFile $archive
+          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ((Get-Item $archive).Length -ne 55964101 -or $hash -cne 'b2e00615feaba45942343c265cc8c5f576142ca682c1ac6661922d4b72492877') { throw 'Pinned Mesa asset size or hash mismatch' }
+          $mesa = Join-Path $env:RUNNER_TEMP 'portable mesa'
+          & "$env:ProgramFiles\7-Zip\7z.exe" x $archive "-o$mesa" -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Mesa extraction failed' }
+          $icds = @(Get-ChildItem $mesa -Recurse -File -Filter 'lvp_icd.x86_64.json')
+          if ($icds.Count -ne 1) { throw 'Expected exactly one x64 lavapipe ICD' }
+          $library = Join-Path $icds[0].DirectoryName 'vulkan_lvp.dll'
+          if (!(Test-Path $library -PathType Leaf)) { throw 'Portable x64 lavapipe DLL missing beside ICD' }
+          $icd = Get-Content $icds[0].FullName -Raw | ConvertFrom-Json
+          $icd.ICD.library_path = $library
+          $config = Join-Path $env:RUNNER_TEMP 'ci-lavapipe.json'
+          $icd | ConvertTo-Json -Depth 6 | Set-Content $config
+          if (!(Test-Path "$env:WINDIR\System32\vulkan-1.dll" -PathType Leaf)) {
+            # Official Khronos runtime, pinned to the winget-pkgs manifest.
+            $runtime = Join-Path $env:RUNNER_TEMP 'VulkanRT-X64-1.4.363.0-Installer.exe'
+            Invoke-WebRequest 'https://sdk.lunarg.com/sdk/download/1.4.363.0/windows/VulkanRT-X64-1.4.363.0-Installer.exe' -OutFile $runtime
+            if ((Get-FileHash $runtime -Algorithm SHA256).Hash -ine '3F03BDA2522D1D10D05461CE8A47364F9AF6F5DC8642B7C45E43943DBA164303') { throw 'Pinned official Vulkan loader hash mismatch' }
+            $loader = Start-Process $runtime -ArgumentList '/S' -Wait -PassThru
+            if ($loader.ExitCode -ne 0 -or !(Test-Path "$env:WINDIR\System32\vulkan-1.dll" -PathType Leaf)) { throw 'CI Vulkan loader setup failed' }
+          }
+          # Vulkan Loader also ignores driver environment overrides in an
+          # elevated host. Register only this temporary manifest in HKLM.
+          # https://github.com/KhronosGroup/Vulkan-Loader/blob/main/loader/loader_environment.c
+          $machine = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::LocalMachine,[Microsoft.Win32.RegistryView]::Registry64)
+          try {
+            $drivers = $machine.CreateSubKey('SOFTWARE\Khronos\Vulkan\Drivers',$true)
+            try {
+              if ($drivers.GetValueNames() -contains $config) { throw 'Temporary ICD registry slot already exists' }
+              @{manifest=$config;value=0} | ConvertTo-Json | Set-Content (Join-Path $env:RUNNER_TEMP 'owned-vulkan-icd.json')
+              $drivers.SetValue($config,0,[Microsoft.Win32.RegistryValueKind]::DWord)
+            } finally { $drivers.Dispose() }
+          } finally { $machine.Dispose() }
+          $icds[0].DirectoryName >> $env:GITHUB_PATH
+          "VK_DRIVER_FILES=$config" >> $env:GITHUB_ENV
+          "VK_ICD_FILENAMES=$config" >> $env:GITHUB_ENV
+          @{scope='Portable software Vulkan on hosted Windows; no physical GPU claim';mesa_tag='26.2.6';mesa_sha256=$hash;icd=$config;library_sha256=(Get-FileHash $library -Algorithm SHA256).Hash.ToLowerInvariant();registry_driver_deployment='temporary exact manifest value, removed after test'} | ConvertTo-Json | Set-Content (Join-Path $env:RUNNER_TEMP 'software-vulkan.json')
+
       - name: Install verified public binary and inspect its running WebView
         shell: pwsh
         run: |
@@ -28,3 +74,8 @@ jobs:
           reg add 'HKLM\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments' /v $app.Name /t REG_SZ /d '--remote-debugging-port=9222' /f
           Start-Process $app.FullName -WorkingDirectory $dir
           node -e "const delay=ms=>new Promise(r=>setTimeout(r,ms));(async()=>{for(let i=0;i<60;i++){await delay(1000);const pages=await fetch('http://127.0.0.1:9222/json/list').then(r=>r.json()).catch(()=>[]);const p=pages.find(p=>p.type==='page');if(!p)continue;const ws=new WebSocket(p.webSocketDebuggerUrl);await new Promise(r=>ws.onopen=r);const res=new Promise(r=>ws.onmessage=e=>r(JSON.parse(e.data)));ws.send(JSON.stringify({id:1,method:'Runtime.evaluate',params:{expression:'document.body.innerText',returnByValue:true}}));const msg=await res;ws.close();const t=msg.result?.result?.value||'';if(!t.trim())continue;console.log(p.url,t.slice(0,3500));if(!/tauri.localhost/.test(p.url)||/ERR_CONNECTION_REFUSED|engine failed|engine could not|engine unavailable|could not start|cannot start/i.test(t))process.exit(1);if(/import|film/i.test(t))process.exit(0)}process.exit(2)})()"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $hostApp = Get-ChildItem $dir -Recurse -Filter 'spektralab-host*.exe' | Select-Object -First 1
+          $engine = Get-ChildItem $dir -Recurse -Directory -Filter engine | Where-Object { Test-Path (Join-Path $_.FullName 'vulkan') } | Select-Object -First 1
+          Invoke-WebRequest 'https://raw.githubusercontent.com/Quietime/SpektraLab-Win/20eb5f94c61431c03bae3e44c2c61cb586cabb74/engine/tests/host_smoke.py' -OutFile host_smoke.py
+          python host_smoke.py --host $hostApp.FullName --resources $engine.FullName
